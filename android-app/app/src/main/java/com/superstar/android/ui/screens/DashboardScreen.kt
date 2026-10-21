@@ -2,6 +2,7 @@ package com.superstar.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.CloudSync
+import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.Save
@@ -92,6 +94,7 @@ fun DashboardScreen(
     val courses by viewModel.courses.collectAsState()
     val isLoadingCourses by viewModel.isLoadingCourses.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
+    val llmTestState by viewModel.llmTestState.collectAsState()
     val uriHandler = LocalUriHandler.current
 
     // 本地配置状态
@@ -645,20 +648,54 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f)
                                 )
-                                if (configLlmProvider.isNotBlank()) {
-                                    Surface(
-                                        shape = CircleShape,
-                                        color = StatusSuccess.copy(alpha = 0.15f)
-                                    ) {
-                                        Text(
-                                            text = AppStrings.aiEnabled(currentLang),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = StatusSuccess,
-                                            fontWeight = FontWeight.Bold,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
+                                when (llmTestState) {
+                                    is MainViewModel.LlmTestState.Success -> {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFF2E7D32)
+                                        ) {
+                                            Text(
+                                                text = "✅ ${AppStrings.llmConnectedBadge(currentLang)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color.White,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
                                     }
-                                    Spacer(modifier = Modifier.width(8.dp))
+                                    is MainViewModel.LlmTestState.Failure -> {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.error
+                                        ) {
+                                            Text(
+                                                text = "❌ ${AppStrings.llmFailedBadge(currentLang)}",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onError,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                    }
+                                    else -> {
+                                        if (configLlmProvider.isNotBlank()) {
+                                            Surface(
+                                                shape = CircleShape,
+                                                color = StatusSuccess.copy(alpha = 0.15f)
+                                            ) {
+                                                Text(
+                                                    text = AppStrings.aiEnabled(currentLang),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = StatusSuccess,
+                                                    fontWeight = FontWeight.Bold,
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                        }
+                                    }
                                 }
                                 Icon(
                                     imageVector = if (showLlmSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
@@ -781,7 +818,10 @@ fun DashboardScreen(
 
                                 OutlinedTextField(
                                     value = configLlmEndpoint,
-                                    onValueChange = { configLlmEndpoint = it },
+                                    onValueChange = {
+                                        configLlmEndpoint = it
+                                        viewModel.clearLlmTestState()
+                                    },
                                     label = { Text(AppStrings.endpointLabel(currentLang)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
@@ -790,7 +830,10 @@ fun DashboardScreen(
 
                                 OutlinedTextField(
                                     value = configLlmKey,
-                                    onValueChange = { configLlmKey = it },
+                                    onValueChange = {
+                                        configLlmKey = it
+                                        viewModel.clearLlmTestState()
+                                    },
                                     label = { Text(AppStrings.apiKeyLabel(currentLang)) },
                                     placeholder = { Text("sk-...") },
                                     modifier = Modifier.fillMaxWidth(),
@@ -800,24 +843,127 @@ fun DashboardScreen(
 
                                 OutlinedTextField(
                                     value = configLlmModel,
-                                    onValueChange = { configLlmModel = it },
+                                    onValueChange = {
+                                        configLlmModel = it
+                                        viewModel.clearLlmTestState()
+                                    },
                                     label = { Text(AppStrings.modelLabel(currentLang)) },
                                     modifier = Modifier.fillMaxWidth(),
                                     singleLine = true,
                                     shape = RoundedCornerShape(12.dp)
                                 )
 
+                                // 连通性测试结果反馈卡片（连通变绿，未连通变红）
+                                when (val state = llmTestState) {
+                                    is MainViewModel.LlmTestState.Success -> {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                                            border = BorderStroke(1.5.dp, Color(0xFF2E7D32))
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.CheckCircle,
+                                                    contentDescription = null,
+                                                    tint = Color(0xFF2E7D32),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text(
+                                                        text = AppStrings.llmSuccess(currentLang),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = Color(0xFF2E7D32)
+                                                    )
+                                                    Text(
+                                                        text = state.message,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = Color(0xFF1B5E20)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    is MainViewModel.LlmTestState.Failure -> {
+                                        Surface(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            shape = RoundedCornerShape(12.dp),
+                                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+                                        ) {
+                                            Row(
+                                                modifier = Modifier.padding(12.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.ErrorOutline,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error,
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(8.dp))
+                                                Column {
+                                                    Text(
+                                                        text = AppStrings.llmFailed(currentLang),
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = MaterialTheme.colorScheme.error
+                                                    )
+                                                    Text(
+                                                        text = state.message,
+                                                        style = MaterialTheme.typography.bodySmall,
+                                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                    else -> {}
+                                }
+
+                                val isTestingLlm = llmTestState is MainViewModel.LlmTestState.Testing
+                                val isLlmSuccess = llmTestState is MainViewModel.LlmTestState.Success
+                                val isLlmFailed = llmTestState is MainViewModel.LlmTestState.Failure
+
+                                val buttonBgColor = when {
+                                    isLlmSuccess -> Color(0xFF2E7D32) // 变绿
+                                    isLlmFailed -> MaterialTheme.colorScheme.error // 变红
+                                    else -> MaterialTheme.colorScheme.tertiaryContainer
+                                }
+
+                                val buttonTextColor = when {
+                                    isLlmSuccess || isLlmFailed -> Color.White
+                                    else -> MaterialTheme.colorScheme.onTertiaryContainer
+                                }
+
                                 Button(
                                     onClick = { viewModel.testLlmConnection(buildLlmConfigJson()) },
                                     modifier = Modifier.fillMaxWidth(),
                                     shape = RoundedCornerShape(12.dp),
-                                    enabled = configLlmProvider.isNotBlank() && configLlmKey.isNotBlank(),
+                                    enabled = !isTestingLlm && configLlmProvider.isNotBlank() && configLlmKey.isNotBlank(),
                                     colors = ButtonDefaults.buttonColors(
-                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                                        containerColor = buttonBgColor,
+                                        contentColor = buttonTextColor,
+                                        disabledContainerColor = buttonBgColor.copy(alpha = 0.6f),
+                                        disabledContentColor = buttonTextColor.copy(alpha = 0.7f)
                                     )
                                 ) {
-                                    Text(AppStrings.testLlmBtn(currentLang), fontWeight = FontWeight.SemiBold)
+                                    if (isTestingLlm) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(16.dp),
+                                            strokeWidth = 2.dp,
+                                            color = buttonTextColor
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(AppStrings.llmTesting(currentLang), fontWeight = FontWeight.SemiBold)
+                                    } else {
+                                        Text(AppStrings.testLlmBtn(currentLang), fontWeight = FontWeight.SemiBold)
+                                    }
                                 }
                             }
                         }

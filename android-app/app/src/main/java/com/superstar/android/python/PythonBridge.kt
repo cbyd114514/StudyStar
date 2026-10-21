@@ -169,21 +169,24 @@ object PythonBridge {
 
     suspend fun executeTestLlmConnection(
         llmConfigJson: String,
-        onLog: (String) -> Unit = {},
         onComplete: (String) -> Unit = { _ -> }
     ) = withContext(Dispatchers.IO) {
         try {
             val py = Python.getInstance()
             val studyModule = py.getModule("android_study")
-            onLog("正在测试大模型连接...")
             val result = studyModule.callAttr("test_llm_connection", llmConfigJson)
             val resultStr = result?.toString() ?: ""
-            flushPythonLogs(studyModule, onLog)
+            // 清理 Python 端缓冲区，避免残留在刷课日志中
+            try {
+                studyModule.callAttr("get_and_clear_logs")
+            } catch (_: Exception) {}
             onComplete(resultStr)
         } catch (e: Exception) {
-            val msg = "测试大模型连接异常: ${e.message}"
-            onLog(msg)
-            onComplete("")
+            val errJson = org.json.JSONObject().apply {
+                put("success", false)
+                put("message", e.message ?: "未知异常")
+            }.toString()
+            onComplete(errJson)
         }
     }
 

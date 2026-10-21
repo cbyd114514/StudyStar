@@ -2,6 +2,7 @@ package com.superstar.android.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import com.superstar.android.ui.i18n.AppStrings
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -89,7 +90,6 @@ fun SettingsScreen(
     val isZh = currentLang == "zh"
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
-    var showLogsConsole by remember { mutableStateOf(true) }
 
     LaunchedEffect(logs.size, autoScrollEnabled) {
         if (logs.isNotEmpty() && autoScrollEnabled && !listState.isScrollInProgress) {
@@ -154,7 +154,7 @@ fun SettingsScreen(
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "menghuanshiguang/SuperStar_R",
+                                    text = AppStrings.GITHUB_REPO_NAME,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -162,16 +162,13 @@ fun SettingsScreen(
                         }
                         Spacer(modifier = Modifier.height(12.dp))
                         Text(
-                            text = if (isZh)
-                                "本项目基于 SuperStar_R 重塑开发，采用 Material Design 3、16 KB 物理分页与 120Hz/144Hz 极清高刷架构。"
-                            else
-                                "Based on SuperStar_R, rebuilt with Material Design 3, 16 KB page size and 120Hz/144Hz high refresh rate.",
+                            text = AppStrings.projectCardDesc(currentLang),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         Button(
-                            onClick = { uriHandler.openUri("https://github.com/menghuanshiguang/SuperStar_R") },
+                            onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(12.dp),
                             colors = ButtonDefaults.buttonColors(

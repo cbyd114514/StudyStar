@@ -80,6 +80,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _autoLogin = MutableStateFlow(false)
     val autoLogin: StateFlow<Boolean> = _autoLogin.asStateFlow()
 
+    // 大模型连通性独立测试状态（不写入日志，直接在 UI 板块变色反馈）
+    private val _llmTestState = MutableStateFlow<LlmTestState>(LlmTestState.Idle)
+    val llmTestState: StateFlow<LlmTestState> = _llmTestState.asStateFlow()
+
+    fun clearLlmTestState() {
+        _llmTestState.value = LlmTestState.Idle
+    }
+
     // 标记用户是否手动点击了登出（登出后绝对禁止静默自动登录）
     val userManuallyLoggedOut = MutableStateFlow(false)
 
@@ -442,29 +450,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun testLlmConnection(llmConfigJson: String?) {
         viewModelScope.launch {
             if (llmConfigJson.isNullOrBlank()) {
-                addLog("请先配置大模型参数", LogType.ERROR)
+                _llmTestState.value = LlmTestState.Failure("请先配置大模型参数")
                 return@launch
             }
-            addLog("正在测试大模型连接...", LogType.INFO)
+            _llmTestState.value = LlmTestState.Testing
             PythonBridge.executeTestLlmConnection(
                 llmConfigJson = llmConfigJson,
-                onLog = { msg -> addLog(msg, LogType.INFO) },
                 onComplete = { resultStr ->
                     if (resultStr.isBlank()) {
-                        addLog("测试大模型连接失败：无响应", LogType.ERROR)
+                        _llmTestState.value = LlmTestState.Failure("大模型连接超时或无响应")
                         return@executeTestLlmConnection
                     }
                     try {
                         val json = org.json.JSONObject(resultStr)
                         val success = json.optBoolean("success", false)
-                        val message = json.optString("message", "")
+                        val message = json.optString("message", if (success) "连通成功" else "连通失败")
                         if (success) {
-                            addLog("✅ $message", LogType.SUCCESS)
+                            _llmTestState.value = LlmTestState.Success(message)
                         } else {
-                            addLog("❌ $message", LogType.ERROR)
+                            _llmTestState.value = LlmTestState.Failure(message)
                         }
                     } catch (e: Exception) {
-                        addLog("解析测试结果失败: ${e.message}", LogType.ERROR)
+                        _llmTestState.value = LlmTestState.Failure(e.message ?: "解析测试结果失败")
                     }
                 }
             )
@@ -593,6 +600,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     enum class LogType {
         INFO, SUCCESS, WARNING, ERROR
+    }
+
+    sealed class LlmTestState {
+        object Idle : LlmTestState()
+        object Testing : LlmTestState()
+        data class Success(val message: String) : LlmTestState()
+        data class Failure(val message: String) : LlmTestState()
     }
 
     enum class Page {

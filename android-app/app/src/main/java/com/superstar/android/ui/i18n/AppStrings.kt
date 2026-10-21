@@ -5,6 +5,9 @@ package com.superstar.android.ui.i18n
  */
 object AppStrings {
 
+    const val GITHUB_REPO_URL = "https://github.com/18062723878/StudyStar"
+    const val GITHUB_REPO_NAME = "18062723878/StudyStar"
+
     fun appName(lang: String): String = if (lang == "zh") "学习星" else "StudyStar"
 
     // --- 登录页 Login ---
@@ -186,6 +189,21 @@ object AppStrings {
     fun testLlmBtn(lang: String): String =
         if (lang == "zh") "测试大模型连通性" else "Test LLM Connectivity"
 
+    fun llmTesting(lang: String): String =
+        if (lang == "zh") "正在检测连通性..." else "Testing connection..."
+
+    fun llmSuccess(lang: String): String =
+        if (lang == "zh") "大模型连通成功！服务响应正常" else "LLM Connected Successfully!"
+
+    fun llmFailed(lang: String): String =
+        if (lang == "zh") "大模型连通失败" else "LLM Connection Failed"
+
+    fun llmConnectedBadge(lang: String): String =
+        if (lang == "zh") "连通正常" else "Connected"
+
+    fun llmFailedBadge(lang: String): String =
+        if (lang == "zh") "连通异常" else "Connection Failed"
+
     fun startStudyBtn(lang: String): String =
         if (lang == "zh") "开始刷课" else "Start Study"
 
@@ -203,8 +221,8 @@ object AppStrings {
         if (lang == "zh") "开源项目主页 (GitHub)" else "Open Source Project (GitHub)"
 
     fun projectCardDesc(lang: String): String =
-        if (lang == "zh") "基于 SuperStar_R 官方代码仓库，采用 Jetpack Compose 与 Material Design 3 全面重构。"
-        else "Based on SuperStar_R, rebuilt with Jetpack Compose & Material Design 3."
+        if (lang == "zh") "学习星 (StudyStar) 官方开源代码仓库，采用 Material Design 3、16 KB 物理分页与 120Hz/144Hz 极清高刷架构。"
+        else "StudyStar Official Repository, rebuilt with Material Design 3, 16 KB page size and 120Hz/144Hz high refresh rate."
 
     fun openGithubBtn(lang: String): String =
         if (lang == "zh") "前往 GitHub 仓库" else "Open GitHub Repository"
