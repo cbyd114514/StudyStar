@@ -369,11 +369,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 onProgress = { progress ->
                     _studyState.value = _studyState.value.copy(progress = progress)
                 },
-                onStatusUpdate = { progress, course, chapter ->
+                onStatusUpdate = { progress, course, chapter, videoProgress, quizProgress ->
                     _studyState.value = _studyState.value.copy(
                         progress = progress,
                         currentCourse = course,
-                        currentChapter = chapter
+                        currentChapter = chapter,
+                        videoProgress = videoProgress,
+                        quizProgress = quizProgress
                     )
                 },
                 onComplete = { success, msg ->
@@ -381,7 +383,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         isRunning = false,
                         isCompleted = success,
                         currentCourse = "",
-                        currentChapter = ""
+                        currentChapter = "",
+                        videoProgress = "",
+                        quizProgress = ""
                     )
                     if (success) {
                         addLog("刷课任务全部完成!", LogType.SUCCESS)
@@ -479,7 +483,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun stopStudy() {
-        _studyState.value = _studyState.value.copy(isRunning = false)
+        _studyState.value = _studyState.value.copy(
+            isRunning = false,
+            videoProgress = "",
+            quizProgress = ""
+        )
         addLog("刷课任务已停止", LogType.WARNING)
         // 通知 Python 端停止刷课
         try {
@@ -588,7 +596,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val jobs: Int = 4,
         val llmConfig: String? = null,
         val currentCourse: String = "",
-        val currentChapter: String = ""
+        val currentChapter: String = "",
+        val videoProgress: String = "",
+        val quizProgress: String = ""
     )
 
     data class LogEntry(

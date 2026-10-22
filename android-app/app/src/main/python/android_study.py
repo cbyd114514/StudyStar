@@ -126,6 +126,60 @@ def stop_study():
     """停止正在运行的刷课任务"""
     global _study_running
     _study_running = False
+    clear_current_video()
+    clear_current_quiz()
+
+
+# ==================== 视频与答题进度实时状态 ====================
+_current_video_progress = ""
+_current_video_name = ""
+_current_quiz_progress = ""
+_current_quiz_title = ""
+
+def format_time_mmss(seconds):
+    try:
+        s = max(0, int(seconds)) if seconds else 0
+        m = s // 60
+        rem_s = s % 60
+        return f"{m:02d}分{rem_s:02d}秒"
+    except Exception:
+        return "00分00秒"
+
+def set_current_video(name, curr_time, tot_time):
+    global _current_video_progress, _current_video_name
+    _current_video_name = str(name) if name else ""
+    _current_video_progress = f"{curr_time} / {tot_time}"
+
+def clear_current_video():
+    global _current_video_progress, _current_video_name
+    _current_video_progress = ""
+    _current_video_name = ""
+
+def get_video_progress():
+    global _current_video_progress
+    return _current_video_progress
+
+def get_video_name():
+    global _current_video_name
+    return _current_video_name
+
+def set_current_quiz(title, progress_str):
+    global _current_quiz_progress, _current_quiz_title
+    _current_quiz_title = str(title) if title else ""
+    _current_quiz_progress = str(progress_str) if progress_str else ""
+
+def clear_current_quiz():
+    global _current_quiz_progress, _current_quiz_title
+    _current_quiz_progress = ""
+    _current_quiz_title = ""
+
+def get_quiz_progress():
+    global _current_quiz_progress
+    return _current_quiz_progress
+
+def get_quiz_title():
+    global _current_quiz_title
+    return _current_quiz_title
 
 
 # ==================== Cookie 持久化 ====================
@@ -1085,11 +1139,13 @@ class AndroidStudyEngine:
 
         duration = int(_video_info["duration"])
         play_time = int(_job.get("playTime", 0)) // 1000
+        video_name = _job.get('name', '视频任务')
         last_log_time = 0
         last_iter = time.time()
         wait_time = int(random.uniform(30, 90))
 
-        self.log(f"[视频] 开始任务: {_job.get('name', '未知')}, 总时长: {duration}s, 已进行: {play_time}s")
+        set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
+        self.log(f"[视频] 开始任务: {video_name}, 总时长: {format_time_mmss(duration)}, 已进行: {format_time_mmss(play_time)}")
 
         forbidden_retry = 0
         max_forbidden_retry = 2
@@ -1099,7 +1155,8 @@ class AndroidStudyEngine:
         passed, state = self.video_progress_log(_course, _job, _job_info, _dtoken, duration, duration, _type, headers=headers)
 
         if passed:
-            self.log(f"[视频] 任务瞬间完成: {_job.get('name', '未知')}")
+            set_current_video(video_name, format_time_mmss(duration), format_time_mmss(duration))
+            self.log(f"[视频] 任务瞬间完成: {video_name}")
             return StudyResult.SUCCESS
 
         while not passed:
@@ -1121,6 +1178,7 @@ class AndroidStudyEngine:
                             _dtoken = refreshed.get("dtoken", _dtoken)
                             duration = int(refreshed.get("duration", duration))
                             play_time = int(refreshed.get("playTime", play_time))
+                            set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
                             self.log(f"[视频] 刷新token成功: dtoken={_dtoken}")
                             continue
                     except Exception:
@@ -1136,10 +1194,12 @@ class AndroidStudyEngine:
             dt = (time.time() - last_iter) * _speed
             last_iter = time.time()
             play_time = min(duration, play_time + dt)
+            set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
 
             time.sleep(1)
 
-        self.log(f"[视频] 任务完成: {_job.get('name', '未知')}")
+        set_current_video(video_name, format_time_mmss(duration), format_time_mmss(duration))
+        self.log(f"[视频] 任务完成: {video_name}")
         return StudyResult.SUCCESS
 
     # ==================== 文档学习 ====================
@@ -1301,9 +1361,11 @@ class AndroidStudyEngine:
         # 搜题/答题
         total_questions = len(questions["questions"])
         found_answers = 0
+        quiz_name = _job.get('name') or "章节测验"
 
-        for q in questions["questions"]:
-            self.log(f"[作业] 当前题目: {q.get('title', '未知')[:50]}...")
+        for idx, q in enumerate(questions["questions"], 1):
+            set_current_quiz(quiz_name, f"第 {idx}/{total_questions} 题")
+            self.log(f"[作业] 当前题目 (第 {idx}/{total_questions} 题): {q.get('title', '未知')[:50]}...")
             answer = ""
             res = None
 
@@ -1427,6 +1489,7 @@ class AndroidStudyEngine:
             self.log(f"[作业] 提交异常: {e}")
             return StudyResult.ERROR
 
+        set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
         return StudyResult.SUCCESS
 
     def _decode_questions_info(self, html_content: str) -> dict:
@@ -1746,9 +1809,9 @@ class AndroidStudyEngine:
 
     def process_course(self, course, speed):
         """
-        处理单个课程的所有章节
-        与 main.py process_course() + JobProcessor 逻辑一致
-        使用 AndroidJobProcessor 实现章节级并行处理
+        处理单个课程的所有章节：
+        刷视频流水线与答题流水线同时进行（并发处理），
+        实时上报当前课时、当前章节、视频分秒进度与答题题号进度
         """
         course_name = course.get('title') or course.get('name') or course.get('coursename') or '未知课程'
         set_current_course(course_name)
@@ -1759,24 +1822,132 @@ class AndroidStudyEngine:
         points = course_point.get("points", [])
 
         if not points:
-            self.log(f"课程无章节: {course.get('title', '未知')}")
+            self.log(f"课程无章节: {course_name}")
             return
 
-        # 使用 AndroidJobProcessor 并行处理章节
-        # 与 main.py process_course() 的 JobProcessor 逻辑一致
-        tasks = []
-        for i, point in enumerate(points):
-            task = ChapterTask(point=point, index=i)
-            tasks.append(task)
+        self.log(f"正在扫描并准备章节任务 (共 {len(points)} 个章节)...")
 
-        processor = AndroidJobProcessor(self, course, tasks, speed, jobs=self._worker_count)
-        processor.run()
+        point_data = {}
+        point_lock = threading.Lock()
+
+        def _scan_point(p):
+            if p.get("has_finished", False):
+                return
+            try:
+                jobs, job_info = self.get_job_list(course, p)
+                if jobs:
+                    with point_lock:
+                        point_data[p["id"]] = (p, jobs, job_info)
+            except Exception as e:
+                self.log(f"扫描章节 {p.get('title', '未知')} 失败: {e}")
+
+        # 限制并发扫描线程数，平滑请求
+        scan_threads = []
+        for p in points:
+            if not self._running:
+                break
+            t = threading.Thread(target=_scan_point, args=(p,), daemon=True)
+            scan_threads.append(t)
+            t.start()
+            if len(scan_threads) >= 6:
+                for st in scan_threads:
+                    st.join()
+                scan_threads = []
+        for st in scan_threads:
+            st.join()
+
+        if not self._running:
+            self.log("刷课已被停止")
+            return
+
+        # 整理视频、测验与其他任务
+        video_tasks = []
+        quiz_tasks = []
+        other_tasks = []
+
+        for p in points:
+            if p["id"] in point_data:
+                p_item, jobs, job_info = point_data[p["id"]]
+                for job in jobs:
+                    j_type = job.get("type", "")
+                    if j_type == "video":
+                        video_tasks.append((p_item, job, job_info))
+                    elif j_type == "workid":
+                        quiz_tasks.append((p_item, job, job_info))
+                    else:
+                        other_tasks.append((p_item, job, job_info))
+
+        self.log(f"[双流水线] 视频任务 {len(video_tasks)} 个, 测验答题 {len(quiz_tasks)} 个, 其他任务 {len(other_tasks)} 个")
+        self.log("[双流水线] 刷视频和答题已配置为同时进行！")
+
+        total_tasks = max(1, len(video_tasks) + len(quiz_tasks) + len(other_tasks))
+        done_tasks = 0
+        done_lock = threading.Lock()
+
+        def _record_done():
+            nonlocal done_tasks
+            with done_lock:
+                done_tasks += 1
+                prog = min(1.0, done_tasks / total_tasks)
+                set_study_progress(prog)
+                self.on_progress(prog)
+
+        def _run_video_pipeline():
+            for p, job, job_info in video_tasks:
+                if not self._running:
+                    break
+                p_title = p.get('title') or p.get('name') or "视频章节"
+                set_current_chapter(p_title)
+                self.log(f"[视频流水线] 开始任务: {job.get('name', '视频')} (章节: {p_title})")
+                try:
+                    self.process_job(course, job, job_info, speed)
+                except Exception as e:
+                    self.log(f"[视频流水线] 任务异常: {e}")
+                _record_done()
+            clear_current_video()
+
+        def _run_quiz_pipeline():
+            for p, job, job_info in quiz_tasks:
+                if not self._running:
+                    break
+                p_title = p.get('title') or p.get('name') or "测验章节"
+                self.log(f"[答题流水线] 开始答题: {job.get('name', '章节测验')} (章节: {p_title})")
+                try:
+                    self.process_job(course, job, job_info, speed)
+                except Exception as e:
+                    self.log(f"[答题流水线] 答题异常: {e}")
+                _record_done()
+            clear_current_quiz()
+
+        def _run_other_pipeline():
+            for p, job, job_info in other_tasks:
+                if not self._running:
+                    break
+                try:
+                    self.process_job(course, job, job_info, speed)
+                except Exception as e:
+                    self.log(f"[其他任务] 异常: {e}")
+                _record_done()
+
+        # 并发启动视频流水线、答题流水线与其他任务流水线（同时进行）
+        v_thread = threading.Thread(target=_run_video_pipeline, daemon=True)
+        q_thread = threading.Thread(target=_run_quiz_pipeline, daemon=True)
+        o_thread = threading.Thread(target=_run_other_pipeline, daemon=True)
+
+        v_thread.start()
+        q_thread.start()
+        o_thread.start()
+
+        v_thread.join()
+        q_thread.join()
+        o_thread.join()
 
         # 更新进度（所有章节处理完成后）
         self.on_progress(1.0)
         set_study_progress(1.0)
-
-        self.log(f"课程学习完成: {course.get('title', '未知')}")
+        clear_current_video()
+        clear_current_quiz()
+        self.log(f"课程学习完成: {course_name}")
 
     def run(self, course_ids=None, speed=1.0, jobs=4):
         """
@@ -1840,11 +2011,16 @@ def get_current_chapter():
 
 def get_study_status():
     global _study_running, _study_progress, _current_course_name, _current_chapter_name, _study_result
+    global _current_video_progress, _current_video_name, _current_quiz_progress, _current_quiz_title
     return json.dumps({
         "running": bool(_study_running),
         "progress": float(_study_progress),
         "course": _current_course_name,
         "chapter": _current_chapter_name,
+        "video_progress": _current_video_progress,
+        "video_name": _current_video_name,
+        "quiz_progress": _current_quiz_progress,
+        "quiz_title": _current_quiz_title,
         "result": str(_study_result or "")
     })
 
@@ -1897,9 +2073,11 @@ def start_study(username, password, course_ids=None, speed=1.0, jobs=4, llm_conf
         _log("[警告] 刷课任务已在运行中")
         return "already_running"
 
-    # 清空实时日志缓冲区
+    # 清空实时日志缓冲区与进度
     global _study_log_buffer
     _study_log_buffer = []
+    clear_current_video()
+    clear_current_quiz()
 
     if llm_config:
         _log(f"[配置] 收到大模型配置: {llm_config[:50]}...")

@@ -5,8 +5,8 @@ package com.superstar.android.ui.i18n
  */
 object AppStrings {
 
-    const val GITHUB_REPO_URL = "https://github.com/18062723878/StudyStar"
-    const val GITHUB_REPO_NAME = "18062723878/StudyStar"
+    const val GITHUB_REPO_URL = "https://github.com/cbyd114514/StudyStar"
+    const val GITHUB_REPO_NAME = "cbyd114514/StudyStar"
 
     fun appName(lang: String): String = if (lang == "zh") "学习星" else "StudyStar"
 
@@ -15,8 +15,8 @@ object AppStrings {
         if (lang == "zh") "超星学习通全功能辅助客户端" else "SuperStar All-in-One Client"
 
     fun loginNotice(lang: String): String =
-        if (lang == "zh") "⚠️ 请注意：以下账号为超星学习通账号，密码为学习通密码。"
-        else "⚠️ Notice: Enter your Xuexitong username and password below."
+        if (lang == "zh") "请注意：以下账号为超星学习通账号，密码为学习通密码。"
+        else "Notice: Enter your Xuexitong username and password below."
 
     fun usernameLabel(lang: String): String =
         if (lang == "zh") "学习通账号 (手机号/学号)" else "Xuexitong Username (Phone/ID)"
@@ -87,6 +87,12 @@ object AppStrings {
 
     fun currentChapterLabel(lang: String): String =
         if (lang == "zh") "当前进行章节" else "Current Chapter"
+
+    fun videoProgressLabel(lang: String): String =
+        if (lang == "zh") "视频播放进度" else "Video Progress"
+
+    fun quizProgressLabel(lang: String): String =
+        if (lang == "zh") "测验答题进度" else "Quiz Progress"
 
     fun connectingCourse(lang: String): String =
         if (lang == "zh") "正在检索/连接课程数据..." else "Connecting to course data..."

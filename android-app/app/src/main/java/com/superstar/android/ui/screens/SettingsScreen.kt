@@ -223,7 +223,7 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = isZh,
                                 onClick = { viewModel.setLanguage("zh") },
-                                label = { Text("🇨🇳 简体中文") },
+                                label = { Text(AppStrings.langZh(currentLang)) },
                                 modifier = Modifier.weight(1f),
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
@@ -233,7 +233,7 @@ fun SettingsScreen(
                             FilterChip(
                                 selected = !isZh,
                                 onClick = { viewModel.setLanguage("en") },
-                                label = { Text("🇺🇸 English") },
+                                label = { Text(AppStrings.langEn(currentLang)) },
                                 modifier = Modifier.weight(1f),
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,

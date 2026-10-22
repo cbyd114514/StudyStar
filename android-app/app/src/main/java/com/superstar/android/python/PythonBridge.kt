@@ -207,7 +207,7 @@ object PythonBridge {
         coursesJson: String? = null,
         onLog: (String) -> Unit = {},
         onProgress: (Float) -> Unit = {},
-        onStatusUpdate: (progress: Float, course: String, chapter: String) -> Unit = { _, _, _ -> },
+        onStatusUpdate: (progress: Float, course: String, chapter: String, videoProgress: String, quizProgress: String) -> Unit = { _, _, _, _, _ -> },
         onComplete: (Boolean, String) -> Unit = { _, _ -> }
     ) = withContext(Dispatchers.IO) {
         try {
@@ -264,12 +264,14 @@ object PythonBridge {
                 // 获取实时日志
                 pollStudyLogs(studyModule, onLog)
 
-                // 获取进度与当前课时/章节
+                // 获取进度与当前课时/章节/视频分秒/答题进度
                 val progress = studyModule.callAttr("get_study_progress")?.toDouble() ?: 0.0
                 val progressFloat = progress.toFloat()
                 val currentCourse = studyModule.callAttr("get_current_course")?.toString() ?: ""
                 val currentChapter = studyModule.callAttr("get_current_chapter")?.toString() ?: ""
-                onStatusUpdate(progressFloat, currentCourse, currentChapter)
+                val videoProgress = studyModule.callAttr("get_video_progress")?.toString() ?: ""
+                val quizProgress = studyModule.callAttr("get_quiz_progress")?.toString() ?: ""
+                onStatusUpdate(progressFloat, currentCourse, currentChapter, videoProgress, quizProgress)
 
                 if (progressFloat > lastProgress) {
                     onProgress(progressFloat)

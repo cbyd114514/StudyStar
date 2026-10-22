@@ -1,6 +1,9 @@
 package com.superstar.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -29,11 +32,15 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
+import androidx.compose.material.icons.outlined.PlayCircleOutline
+import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
@@ -311,6 +318,58 @@ fun DashboardScreen(
                                         fontWeight = FontWeight.Medium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
+
+                                    if (studyState.videoProgress.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.PlayCircleOutline,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = AppStrings.videoProgressLabel(currentLang),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.primary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = studyState.videoProgress,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
+
+                                    if (studyState.quizProgress.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Quiz,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.tertiary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = AppStrings.quizProgressLabel(currentLang),
+                                                style = MaterialTheme.typography.labelMedium,
+                                                color = MaterialTheme.colorScheme.tertiary,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = studyState.quizProgress,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                    }
                                 }
                             }
 
@@ -654,13 +713,24 @@ fun DashboardScreen(
                                             shape = CircleShape,
                                             color = Color(0xFF2E7D32)
                                         ) {
-                                            Text(
-                                                text = "✅ ${AppStrings.llmConnectedBadge(currentLang)}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = Color.White,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                            )
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Check,
+                                                    contentDescription = null,
+                                                    tint = Color.White,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = AppStrings.llmConnectedBadge(currentLang),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = Color.White,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                     }
@@ -669,13 +739,24 @@ fun DashboardScreen(
                                             shape = CircleShape,
                                             color = MaterialTheme.colorScheme.error
                                         ) {
-                                            Text(
-                                                text = "❌ ${AppStrings.llmFailedBadge(currentLang)}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onError,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                            )
+                                            Row(
+                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Close,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onError,
+                                                    modifier = Modifier.size(12.dp)
+                                                )
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Text(
+                                                    text = AppStrings.llmFailedBadge(currentLang),
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = MaterialTheme.colorScheme.onError,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
                                         }
                                         Spacer(modifier = Modifier.width(8.dp))
                                     }
@@ -705,267 +786,44 @@ fun DashboardScreen(
                             }
                         }
 
-                        AnimatedVisibility(visible = showLlmSection) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 16.dp),
-                                verticalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                // 1. AI 答题使用说明卡片
-                                Surface(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Info,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = AppStrings.aiGuideTitle(currentLang),
-                                                style = MaterialTheme.typography.titleSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(6.dp))
-                                        Text(
-                                            text = AppStrings.aiGuideDesc(currentLang),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
-                                            lineHeight = 18.sp
-                                        )
+                        AnimatedVisibility(
+                            visible = showLlmSection,
+                            enter = fadeIn(animationSpec = tween(120)),
+                            exit = fadeOut(animationSpec = tween(120))
+                        ) {
+                            AiConfigForm(
+                                currentLang = currentLang,
+                                configLlmProvider = configLlmProvider,
+                                configLlmEndpoint = configLlmEndpoint,
+                                configLlmKey = configLlmKey,
+                                configLlmModel = configLlmModel,
+                                llmTestState = llmTestState,
+                                onProviderChange = { provider ->
+                                    configLlmProvider = provider
+                                    if (provider == "DeepSeek") {
+                                        configLlmEndpoint = "https://api.deepseek.com/v1/chat/completions"
+                                        configLlmModel = "deepseek-chat"
+                                    } else if (provider == "SiliconFlow") {
+                                        configLlmEndpoint = "https://api.siliconflow.cn/v1/chat/completions"
+                                        configLlmModel = "deepseek-ai/DeepSeek-V3"
                                     }
+                                },
+                                onEndpointChange = {
+                                    configLlmEndpoint = it
+                                    viewModel.clearLlmTestState()
+                                },
+                                onKeyChange = {
+                                    configLlmKey = it
+                                    viewModel.clearLlmTestState()
+                                },
+                                onModelChange = {
+                                    configLlmModel = it
+                                    viewModel.clearLlmTestState()
+                                },
+                                onTestConnection = {
+                                    viewModel.testLlmConnection(buildLlmConfigJson())
                                 }
-
-                                // 2. 快捷获取 API Key 跳转按钮
-                                Text(
-                                    text = AppStrings.aiQuickUrls(currentLang),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    OutlinedButton(
-                                        onClick = { uriHandler.openUri("https://platform.deepseek.com/api_keys") },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(AppStrings.deepseekBtn(currentLang), fontSize = 12.sp)
-                                    }
-                                    OutlinedButton(
-                                        onClick = { uriHandler.openUri("https://cloud.siliconflow.cn/account/ak") },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(10.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(AppStrings.siliconFlowBtn(currentLang), fontSize = 12.sp)
-                                    }
-                                }
-
-                                Text(
-                                    text = AppStrings.selectProviderTip(currentLang),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    listOf("DeepSeek", "SiliconFlow", "AI").forEach { provider ->
-                                        FilterChip(
-                                            selected = configLlmProvider == provider,
-                                            onClick = {
-                                                configLlmProvider = provider
-                                                if (provider == "DeepSeek") {
-                                                    configLlmEndpoint = "https://api.deepseek.com/v1/chat/completions"
-                                                    configLlmModel = "deepseek-chat"
-                                                } else if (provider == "SiliconFlow") {
-                                                    configLlmEndpoint = "https://api.siliconflow.cn/v1/chat/completions"
-                                                    configLlmModel = "deepseek-ai/DeepSeek-V3"
-                                                }
-                                            },
-                                            label = { Text(provider) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                            )
-                                        )
-                                    }
-                                }
-
-                                OutlinedTextField(
-                                    value = configLlmEndpoint,
-                                    onValueChange = {
-                                        configLlmEndpoint = it
-                                        viewModel.clearLlmTestState()
-                                    },
-                                    label = { Text(AppStrings.endpointLabel(currentLang)) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-
-                                OutlinedTextField(
-                                    value = configLlmKey,
-                                    onValueChange = {
-                                        configLlmKey = it
-                                        viewModel.clearLlmTestState()
-                                    },
-                                    label = { Text(AppStrings.apiKeyLabel(currentLang)) },
-                                    placeholder = { Text("sk-...") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-
-                                OutlinedTextField(
-                                    value = configLlmModel,
-                                    onValueChange = {
-                                        configLlmModel = it
-                                        viewModel.clearLlmTestState()
-                                    },
-                                    label = { Text(AppStrings.modelLabel(currentLang)) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-
-                                // 连通性测试结果反馈卡片（连通变绿，未连通变红）
-                                when (val state = llmTestState) {
-                                    is MainViewModel.LlmTestState.Success -> {
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = Color(0xFF2E7D32).copy(alpha = 0.12f),
-                                            border = BorderStroke(1.5.dp, Color(0xFF2E7D32))
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.CheckCircle,
-                                                    contentDescription = null,
-                                                    tint = Color(0xFF2E7D32),
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Column {
-                                                    Text(
-                                                        text = AppStrings.llmSuccess(currentLang),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = Color(0xFF2E7D32)
-                                                    )
-                                                    Text(
-                                                        text = state.message,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = Color(0xFF1B5E20)
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    is MainViewModel.LlmTestState.Failure -> {
-                                        Surface(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            shape = RoundedCornerShape(12.dp),
-                                            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
-                                            border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(12.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.ErrorOutline,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.error,
-                                                    modifier = Modifier.size(20.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(8.dp))
-                                                Column {
-                                                    Text(
-                                                        text = AppStrings.llmFailed(currentLang),
-                                                        style = MaterialTheme.typography.bodyMedium,
-                                                        fontWeight = FontWeight.Bold,
-                                                        color = MaterialTheme.colorScheme.error
-                                                    )
-                                                    Text(
-                                                        text = state.message,
-                                                        style = MaterialTheme.typography.bodySmall,
-                                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                                    )
-                                                }
-                                            }
-                                        }
-                                    }
-                                    else -> {}
-                                }
-
-                                val isTestingLlm = llmTestState is MainViewModel.LlmTestState.Testing
-                                val isLlmSuccess = llmTestState is MainViewModel.LlmTestState.Success
-                                val isLlmFailed = llmTestState is MainViewModel.LlmTestState.Failure
-
-                                val buttonBgColor = when {
-                                    isLlmSuccess -> Color(0xFF2E7D32) // 变绿
-                                    isLlmFailed -> MaterialTheme.colorScheme.error // 变红
-                                    else -> MaterialTheme.colorScheme.tertiaryContainer
-                                }
-
-                                val buttonTextColor = when {
-                                    isLlmSuccess || isLlmFailed -> Color.White
-                                    else -> MaterialTheme.colorScheme.onTertiaryContainer
-                                }
-
-                                Button(
-                                    onClick = { viewModel.testLlmConnection(buildLlmConfigJson()) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp),
-                                    enabled = !isTestingLlm && configLlmProvider.isNotBlank() && configLlmKey.isNotBlank(),
-                                    colors = ButtonDefaults.buttonColors(
-                                        containerColor = buttonBgColor,
-                                        contentColor = buttonTextColor,
-                                        disabledContainerColor = buttonBgColor.copy(alpha = 0.6f),
-                                        disabledContentColor = buttonTextColor.copy(alpha = 0.7f)
-                                    )
-                                ) {
-                                    if (isTestingLlm) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(16.dp),
-                                            strokeWidth = 2.dp,
-                                            color = buttonTextColor
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(AppStrings.llmTesting(currentLang), fontWeight = FontWeight.SemiBold)
-                                    } else {
-                                        Text(AppStrings.testLlmBtn(currentLang), fontWeight = FontWeight.SemiBold)
-                                    }
-                                }
-                            }
+                            )
                         }
                     }
                 }
@@ -1100,6 +958,266 @@ private fun CourseItemCard(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AiConfigForm(
+    currentLang: String,
+    configLlmProvider: String,
+    configLlmEndpoint: String,
+    configLlmKey: String,
+    configLlmModel: String,
+    llmTestState: MainViewModel.LlmTestState,
+    onProviderChange: (String) -> Unit,
+    onEndpointChange: (String) -> Unit,
+    onKeyChange: (String) -> Unit,
+    onModelChange: (String) -> Unit,
+    onTestConnection: () -> Unit
+) {
+    val uriHandler = LocalUriHandler.current
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        // 1. AI 答题使用说明卡片
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+        ) {
+            Column(modifier = Modifier.padding(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = AppStrings.aiGuideTitle(currentLang),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = AppStrings.aiGuideDesc(currentLang),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
+                    lineHeight = 18.sp
+                )
+            }
+        }
+
+        // 2. 快捷获取 API Key 跳转按钮
+        Text(
+            text = AppStrings.aiQuickUrls(currentLang),
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = { uriHandler.openUri("https://platform.deepseek.com/api_keys") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(AppStrings.deepseekBtn(currentLang), fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = { uriHandler.openUri("https://cloud.siliconflow.cn/account/ak") },
+                modifier = Modifier.weight(1f),
+                shape = RoundedCornerShape(10.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(AppStrings.siliconFlowBtn(currentLang), fontSize = 12.sp)
+            }
+        }
+
+        Text(
+            text = AppStrings.selectProviderTip(currentLang),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("DeepSeek", "SiliconFlow", "AI").forEach { provider ->
+                FilterChip(
+                    selected = configLlmProvider == provider,
+                    onClick = { onProviderChange(provider) },
+                    label = { Text(provider) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = configLlmEndpoint,
+            onValueChange = onEndpointChange,
+            label = { Text(AppStrings.endpointLabel(currentLang)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        OutlinedTextField(
+            value = configLlmKey,
+            onValueChange = onKeyChange,
+            label = { Text(AppStrings.apiKeyLabel(currentLang)) },
+            placeholder = { Text("sk-...") },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        OutlinedTextField(
+            value = configLlmModel,
+            onValueChange = onModelChange,
+            label = { Text(AppStrings.modelLabel(currentLang)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            shape = RoundedCornerShape(12.dp)
+        )
+
+        // 连通性测试结果反馈卡片（连通变绿，未连通变红）
+        when (val state = llmTestState) {
+            is MainViewModel.LlmTestState.Success -> {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = Color(0xFF2E7D32).copy(alpha = 0.12f),
+                    border = BorderStroke(1.5.dp, Color(0xFF2E7D32))
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.CheckCircle,
+                            contentDescription = null,
+                            tint = Color(0xFF2E7D32),
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = AppStrings.llmSuccess(currentLang),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF2E7D32)
+                            )
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color(0xFF1B5E20)
+                            )
+                        }
+                    }
+                }
+            }
+            is MainViewModel.LlmTestState.Failure -> {
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
+                    border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.ErrorOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Column {
+                            Text(
+                                text = AppStrings.llmFailed(currentLang),
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
+                            Text(
+                                text = state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        }
+                    }
+                }
+            }
+            else -> {}
+        }
+
+        val isTestingLlm = llmTestState is MainViewModel.LlmTestState.Testing
+        val isLlmSuccess = llmTestState is MainViewModel.LlmTestState.Success
+        val isLlmFailed = llmTestState is MainViewModel.LlmTestState.Failure
+
+        val buttonBgColor = when {
+            isLlmSuccess -> Color(0xFF2E7D32) // 变绿
+            isLlmFailed -> MaterialTheme.colorScheme.error // 变红
+            else -> MaterialTheme.colorScheme.tertiaryContainer
+        }
+
+        val buttonTextColor = when {
+            isLlmSuccess || isLlmFailed -> Color.White
+            else -> MaterialTheme.colorScheme.onTertiaryContainer
+        }
+
+        Button(
+            onClick = onTestConnection,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            enabled = !isTestingLlm && configLlmProvider.isNotBlank() && configLlmKey.isNotBlank(),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = buttonBgColor,
+                contentColor = buttonTextColor,
+                disabledContainerColor = buttonBgColor.copy(alpha = 0.6f),
+                disabledContentColor = buttonTextColor.copy(alpha = 0.7f)
+            )
+        ) {
+            if (isTestingLlm) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(16.dp),
+                    strokeWidth = 2.dp,
+                    color = buttonTextColor
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(AppStrings.llmTesting(currentLang), fontWeight = FontWeight.SemiBold)
+            } else {
+                Text(AppStrings.testLlmBtn(currentLang), fontWeight = FontWeight.SemiBold)
             }
         }
     }
