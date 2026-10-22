@@ -1361,10 +1361,31 @@ class AndroidStudyEngine:
             self.log("[作业] 该作业此前已完成提交，无需重复作答")
             return StudyResult.SUCCESS
 
+        # 检查是否嵌套在 iframe 中或有前端跳转
+        try:
+            soup_initial = BeautifulSoup(resp_text, "html.parser")
+            iframe_tag = soup_initial.find("iframe")
+            if iframe_tag and iframe_tag.get("src"):
+                iframe_src = iframe_tag.get("src")
+                if any(k in iframe_src for k in ["work", "doHomeWork", "workHandle"]):
+                    real_work_url = urllib.parse.urljoin(resp.url, iframe_src)
+                    self.log(f"[作业] 发现嵌套作业 iframe，正在跳转获取真实作业页: {real_work_url}")
+                    resp = self.session.get(real_work_url, timeout=30)
+                    resp_text = resp.text
+            elif "location.href" in resp_text and len(resp_text) < 1000:
+                m_redir = re.search(r"""(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]""", resp_text)
+                if m_redir:
+                    redir_url = urllib.parse.urljoin(resp.url, m_redir.group(1))
+                    self.log(f"[作业] 发现页面跳转脚本，正在重定向: {redir_url}")
+                    resp = self.session.get(redir_url, timeout=30)
+                    resp_text = resp.text
+        except Exception as e:
+            self.log(f"[作业] 跳转检测容错: {e}")
+
         _ORIGIN_HTML_CONTENT = resp_text
 
-        # 2. 解析题目与表单
-        questions = self._decode_questions_info(resp_text)
+        # 2. 解析题目与表单元数据（全面提取 workAnswerId, workId 等参数，杜绝 code2）
+        questions = self._decode_questions_info(resp_text, resp, _course, _job, _job_info)
         if not questions.get("questions"):
             if "form" not in resp_text.lower():
                 self.log("[作业] 页面未包含作答表单，可能无需作答或已完成")
@@ -1464,11 +1485,23 @@ class AndroidStudyEngine:
 
         del questions["questions"]
 
-        # 确保关键定位字段存在
-        if "courseId" not in questions:
+        # 确保关键定位字段与别名完备（杜绝参数遗漏导致 code2）
+        if not questions.get("workAnswerId"):
+            questions["workAnswerId"] = questions.get("workId", "")
+        if not questions.get("workanswerId"):
+            questions["workanswerId"] = questions.get("workAnswerId", "")
+        if not questions.get("totalQuestionNum"):
+            questions["totalQuestionNum"] = str(total_questions)
+        if not questions.get("courseId"):
             questions["courseId"] = _course.get("courseId", "")
-        if "classId" not in questions:
+        if not questions.get("courseid"):
+            questions["courseid"] = questions["courseId"]
+        if not questions.get("classId"):
             questions["classId"] = _course.get("clazzId", "")
+        if not questions.get("clazzId"):
+            questions["clazzId"] = questions["classId"]
+        if not questions.get("api"):
+            questions["api"] = "1"
 
         # 5. 计算动态提交 URL 与完整安全 Headers
         parsed_url = urllib.parse.urlparse(resp.url)
@@ -1482,6 +1515,17 @@ class AndroidStudyEngine:
             submit_url = urllib.parse.urljoin(resp.url, form_action)
         else:
             submit_url = f"{origin}/mooc-ans/work/addStudentWorkNew"
+
+        submit_params = {
+            "courseId": questions.get("courseId", ""),
+            "classId": questions.get("classId", ""),
+            "workAnswerId": questions.get("workAnswerId", ""),
+            "workId": questions.get("workId", ""),
+            "jobid": questions.get("jobid", ""),
+            "knowledgeid": questions.get("knowledgeid", ""),
+            "enc": questions.get("enc", ""),
+            "api": questions.get("api", "1"),
+        }
 
         submit_headers = {
             "Host": host,
@@ -1500,10 +1544,12 @@ class AndroidStudyEngine:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         }
 
+        self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId')}, workId={questions.get('workId')}, totalQuestionNum={questions.get('totalQuestionNum')}, courseId={questions.get('courseId')}, classId={questions.get('classId')}")
+
         # 6. 执行提交与多重容错重试
         try:
             self.log(f"[作业] 正在提交答案至: {submit_url}")
-            res = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
+            res = self.session.post(submit_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
             res_json = {}
             try:
                 res_json = res.json()
@@ -1523,25 +1569,32 @@ class AndroidStudyEngine:
                 set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已完成)")
                 return StudyResult.SUCCESS
 
-            # 备用方案 1：切换备用提交接口重试 (如 addStudentWorkNewWeb)
-            alt_url = f"{origin}/mooc-ans/work/addStudentWorkNewWeb" if "addStudentWorkNewWeb" not in submit_url else f"{origin}/mooc-ans/work/addStudentWorkNew"
-            self.log(f"[作业] 主接口返回: {msg}，正在尝试备用提交接口: {alt_url}")
-            try:
-                res_alt = self.session.post(alt_url, data=questions, headers=submit_headers, timeout=30)
-                res_alt_json = res_alt.json()
-                alt_msg = res_alt_json.get("msg", "")
-                if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
-                    self.log(f"[作业] 备用接口提交成功 -> {alt_msg}")
-                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
-                    return StudyResult.SUCCESS
-            except Exception:
-                pass
+            # 备用方案 1：切换备用提交接口重试 (如 addStudentWorkNewWeb / work/addStudentWorkNew)
+            candidate_endpoints = [
+                f"{origin}/mooc-ans/work/addStudentWorkNewWeb",
+                f"{origin}/work/addStudentWorkNewWeb",
+                f"{origin}/work/addStudentWorkNew",
+            ]
+            for alt_url in candidate_endpoints:
+                if alt_url == submit_url:
+                    continue
+                self.log(f"[作业] 主接口返回: {msg}，正在尝试备用提交接口: {alt_url}")
+                try:
+                    res_alt = self.session.post(alt_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
+                    res_alt_json = res_alt.json()
+                    alt_msg = res_alt_json.get("msg", "")
+                    if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
+                        self.log(f"[作业] 备用接口提交成功 -> {alt_msg}")
+                        set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
+                        return StudyResult.SUCCESS
+                except Exception:
+                    pass
 
             # 备用方案 2：保存草稿模式重试 (pyFlag="1")
             self.log("[作业] 正在尝试保存草稿模式 (pyFlag=1)...")
             try:
                 questions["pyFlag"] = "1"
-                res_save = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
+                res_save = self.session.post(submit_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
                 res_save_json = res_save.json()
                 if res_save_json.get("status") is True:
                     self.log(f"[作业] 保存答题成功 -> {res_save_json.get('msg', '')}")
@@ -1556,13 +1609,13 @@ class AndroidStudyEngine:
             self.log(f"[作业] 提交网络或服务器异常: {e}")
             return StudyResult.ERROR
 
-    def _decode_questions_info(self, html_content: str) -> dict:
+    def _decode_questions_info(self, html_content: str, resp=None, _course=None, _job=None, _job_info=None) -> dict:
         """
         解析作业题目信息
         全面支持超星学习通加密字体解码与题型精准识别
         """
         soup = BeautifulSoup(html_content, "html.parser")
-        form_data = self._extract_form_data(soup)
+        form_data = self._extract_form_data(soup, html_content, resp, _course, _job, _job_info)
         if not form_data:
             form_tag = soup.find("form")
             if form_tag:
@@ -1605,18 +1658,139 @@ class AndroidStudyEngine:
         form_data["answerwqbid"] = ",".join([q["id"] for q in questions]) + ","
         return form_data
 
-    def _extract_form_data(self, soup: BeautifulSoup) -> dict:
-        """提取表单数据，兼容 form 标签内所有输入控件"""
+    def _extract_form_data(self, soup: BeautifulSoup, html_content: str = "", resp=None, _course=None, _job=None, _job_info=None) -> dict:
+        """
+        提取表单数据与系统元参数
+        保证 workAnswerId, workId, courseId, classId, totalQuestionNum 等关键参数完整无缺
+        """
         form_data = {}
-        form_tag = soup.find("form")
-        if not form_tag:
-            return form_data
 
-        for input_tag in form_tag.find_all("input"):
-            name = input_tag.attrs.get("name")
-            if not name or "answer" in name:
+        # 1. 扫描页面中所有 input 控件（包括 form 内部与外部所有 hidden/text 等元素）
+        for input_tag in soup.find_all("input"):
+            key = input_tag.attrs.get("name") or input_tag.attrs.get("id")
+            if not key:
                 continue
-            form_data[name] = input_tag.attrs.get("value", "")
+            key = str(key).strip()
+            # 过滤单题答案内容字段（形如 answer12345, answertype12345），保留元数据字段
+            if re.match(r"^answer\d+$", key, re.IGNORECASE) or re.match(r"^answertype\d+$", key, re.IGNORECASE) or re.match(r"^answerEditor\d+$", key, re.IGNORECASE):
+                continue
+            val = input_tag.attrs.get("value", "")
+            form_data[key] = val
+
+            # 标准字段与别名字段自动同步映射
+            k_lower = key.lower()
+            if k_lower == "workanswerid":
+                form_data["workAnswerId"] = val
+                form_data["workanswerId"] = val
+            elif k_lower in ("courseid", "course_id"):
+                form_data["courseId"] = val
+                form_data["courseid"] = val
+            elif k_lower in ("classid", "clazzid"):
+                form_data["classId"] = val
+                form_data["clazzId"] = val
+            elif k_lower == "workid":
+                form_data["workId"] = val
+            elif k_lower == "totalquestionnum":
+                form_data["totalQuestionNum"] = val
+            elif k_lower == "knowledgeid":
+                form_data["knowledgeid"] = val
+            elif k_lower == "jobid":
+                form_data["jobid"] = val
+            elif k_lower == "oldworkid":
+                form_data["oldWorkId"] = val
+            elif k_lower == "workrelationid":
+                form_data["workRelationId"] = val
+            elif k_lower == "enc":
+                form_data["enc"] = val
+            elif k_lower == "fullscore":
+                form_data["fullScore"] = val
+
+        # 2. 从响应 URL 以及重定向历史 URL 中提取 Query 参数（这是 workAnswerId 等最关键的来源）
+        if resp:
+            candidate_urls = [getattr(resp, "url", "")]
+            if hasattr(resp, "history"):
+                for h in resp.history:
+                    candidate_urls.append(getattr(h, "url", ""))
+                    loc = getattr(h, "headers", {}).get("Location", "")
+                    if loc:
+                        candidate_urls.append(urllib.parse.urljoin(getattr(h, "url", ""), loc))
+            for u in candidate_urls:
+                if not u:
+                    continue
+                try:
+                    parsed_u = urllib.parse.urlparse(u)
+                    qs = urllib.parse.parse_qs(parsed_u.query)
+                    for qk, qv in qs.items():
+                        if qv and (qk not in form_data or not form_data[qk]):
+                            val = qv[0]
+                            form_data[qk] = val
+                            qk_lower = qk.lower()
+                            if qk_lower == "workanswerid":
+                                form_data["workAnswerId"] = val
+                                form_data["workanswerId"] = val
+                            elif qk_lower in ("courseid", "course_id"):
+                                form_data["courseId"] = val
+                                form_data["courseid"] = val
+                            elif qk_lower in ("classid", "clazzid"):
+                                form_data["classId"] = val
+                                form_data["clazzId"] = val
+                except Exception:
+                    pass
+
+        # 3. 从 JavaScript 变量中正则提取（如 var workAnswerId = '...'）
+        scan_vars = [
+            "workAnswerId", "workId", "courseId", "classId", "clazzId",
+            "knowledgeid", "jobid", "enc", "oldWorkId", "totalQuestionNum",
+            "workRelationId", "cpi", "fullScore"
+        ]
+        for var_name in scan_vars:
+            if var_name not in form_data or not form_data[var_name]:
+                pat = rf"""(?:var\s+{var_name}\s*=\s*['"]([^'"]+)['"]|{var_name}\s*[:=]\s*['"]([^'"]+)['"]|{var_name}\s*[:=]\s*([0-9a-zA-Z_-]+))"""
+                m = re.search(pat, html_content)
+                if m:
+                    extracted_val = m.group(1) or m.group(2) or m.group(3)
+                    if extracted_val and extracted_val not in ("null", "undefined"):
+                        form_data[var_name] = extracted_val
+                        if var_name.lower() == "workanswerid":
+                            form_data["workAnswerId"] = extracted_val
+                            form_data["workanswerId"] = extracted_val
+
+        # 4. 从上下文参数中补齐
+        if _course:
+            if not form_data.get("courseId"):
+                form_data["courseId"] = _course.get("courseId", "")
+            if not form_data.get("courseid"):
+                form_data["courseid"] = _course.get("courseId", "")
+            if not form_data.get("classId"):
+                form_data["classId"] = _course.get("clazzId", "")
+            if not form_data.get("clazzId"):
+                form_data["clazzId"] = _course.get("clazzId", "")
+
+        if _job:
+            if not form_data.get("jobid"):
+                form_data["jobid"] = _job.get("jobid", "")
+            if not form_data.get("originJobId"):
+                form_data["originJobId"] = _job.get("jobid", "")
+            if not form_data.get("workId"):
+                form_data["workId"] = _job.get("jobid", "").replace("work-", "")
+            if not form_data.get("enc"):
+                form_data["enc"] = _job.get("enc", "")
+
+        if _job_info:
+            if not form_data.get("knowledgeid"):
+                form_data["knowledgeid"] = str(_job_info.get("knowledgeid", ""))
+            if not form_data.get("cpi"):
+                form_data["cpi"] = str(_job_info.get("cpi", ""))
+            if not form_data.get("ktoken"):
+                form_data["ktoken"] = str(_job_info.get("ktoken", ""))
+
+        if not form_data.get("api"):
+            form_data["api"] = "1"
+
+        if not form_data.get("workAnswerId"):
+            if form_data.get("workId"):
+                form_data["workAnswerId"] = form_data["workId"]
+
         return form_data
 
     def _process_question(self, div_tag, font_decoder=None) -> dict:

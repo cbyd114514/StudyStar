@@ -414,18 +414,44 @@ def decode_questions_info(html_content: str) -> Dict[str, Any]:
 
 
 def _extract_form_data(soup: BeautifulSoup) -> Dict[str, Any]:
-    """从BeautifulSoup对象中提取表单数据"""
+    """从BeautifulSoup对象中提取表单数据与元参数"""
     form_data = {}
-    form_tag = soup.find("form")
     
-    if not form_tag:
-        return form_data
-    
-    # 提取所有非答案字段的input
-    for input_tag in form_tag.find_all("input"):
-        if "name" not in input_tag.attrs or "answer" in input_tag.attrs["name"]:
+    # 扫描页面所有 input 元素
+    for input_tag in soup.find_all("input"):
+        key = input_tag.attrs.get("name") or input_tag.attrs.get("id")
+        if not key:
             continue
-        form_data[input_tag.attrs["name"]] = input_tag.attrs.get("value", "")
+        key = str(key).strip()
+        # 排除单题答案字段，保留元数据字段
+        if re.match(r"^answer\d+$", key, re.IGNORECASE) or re.match(r"^answertype\d+$", key, re.IGNORECASE) or re.match(r"^answerEditor\d+$", key, re.IGNORECASE):
+            continue
+        val = input_tag.attrs.get("value", "")
+        form_data[key] = val
+        k_lower = key.lower()
+        if k_lower == "workanswerid":
+            form_data["workAnswerId"] = val
+            form_data["workanswerId"] = val
+        elif k_lower in ("courseid", "course_id"):
+            form_data["courseId"] = val
+            form_data["courseid"] = val
+        elif k_lower in ("classid", "clazzid"):
+            form_data["classId"] = val
+            form_data["clazzId"] = val
+        elif k_lower == "workid":
+            form_data["workId"] = val
+        elif k_lower == "totalquestionnum":
+            form_data["totalQuestionNum"] = val
+        elif k_lower == "knowledgeid":
+            form_data["knowledgeid"] = val
+        elif k_lower == "jobid":
+            form_data["jobid"] = val
+        elif k_lower == "oldworkid":
+            form_data["oldWorkId"] = val
+        elif k_lower == "workrelationid":
+            form_data["workRelationId"] = val
+        elif k_lower == "enc":
+            form_data["enc"] = val
     
     return form_data
 

@@ -55,7 +55,15 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.10"
     }
+
+    applicationVariants.all {
+        outputs.all {
+            (this as? com.android.build.gradle.internal.api.BaseVariantOutputImpl)?.outputFileName = "StudyStars.apk"
+        }
+    }
 }
+
+setProperty("archivesBaseName", "StudyStars")
 
 chaquopy {
     defaultConfig {

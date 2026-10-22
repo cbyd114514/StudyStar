@@ -69,7 +69,7 @@
 
 ```
 SuperStar_R_Android/
-├── app-debug.apk         # 预编译好的最新「学习星」Release/Debug 安装包
+├── StudyStars.apk         # 预编译好的最新「学习星」Release/Debug 安装包
 ├── android-app/          # Android Studio 项目工程
 │   ├── app/
 │   │   ├── src/main/
