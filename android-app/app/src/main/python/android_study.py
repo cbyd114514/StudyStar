@@ -1485,21 +1485,16 @@ class AndroidStudyEngine:
 
         del questions["questions"]
 
-        # 确保关键定位字段与别名完备（杜绝参数遗漏导致 code2）
-        if not questions.get("workAnswerId"):
-            questions["workAnswerId"] = questions.get("workId", "")
-        if not questions.get("workanswerId"):
-            questions["workanswerId"] = questions.get("workAnswerId", "")
+        # 清除任何别名字段，严禁添加重复或别名字段，防止后端解析出多值数组导致 code-2
+        for bad_key in ["workanswerId", "clazzId", "courseid", "course_id", "originJobId"]:
+            questions.pop(bad_key, None)
+
         if not questions.get("totalQuestionNum"):
             questions["totalQuestionNum"] = str(total_questions)
-        if not questions.get("courseId"):
-            questions["courseId"] = _course.get("courseId", "")
-        if not questions.get("courseid"):
-            questions["courseid"] = questions["courseId"]
-        if not questions.get("classId"):
-            questions["classId"] = _course.get("clazzId", "")
-        if not questions.get("clazzId"):
-            questions["clazzId"] = questions["classId"]
+        if not questions.get("courseId") and _course:
+            questions["courseId"] = str(_course.get("courseId", ""))
+        if not questions.get("classId") and _course:
+            questions["classId"] = str(_course.get("clazzId", ""))
         if not questions.get("api"):
             questions["api"] = "1"
 
@@ -1512,20 +1507,9 @@ class AndroidStudyEngine:
         form_tag = soup_doc.find("form")
         form_action = form_tag.get("action", "") if form_tag else ""
         if form_action:
-            submit_url = urllib.parse.urljoin(resp.url, form_action)
+            submit_url = urllib.parse.urljoin(resp.url, form_action).split("?")[0]
         else:
             submit_url = f"{origin}/mooc-ans/work/addStudentWorkNew"
-
-        submit_params = {
-            "courseId": questions.get("courseId", ""),
-            "classId": questions.get("classId", ""),
-            "workAnswerId": questions.get("workAnswerId", ""),
-            "workId": questions.get("workId", ""),
-            "jobid": questions.get("jobid", ""),
-            "knowledgeid": questions.get("knowledgeid", ""),
-            "enc": questions.get("enc", ""),
-            "api": questions.get("api", "1"),
-        }
 
         submit_headers = {
             "Host": host,
@@ -1544,12 +1528,12 @@ class AndroidStudyEngine:
             "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
         }
 
-        self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId')}, workId={questions.get('workId')}, totalQuestionNum={questions.get('totalQuestionNum')}, courseId={questions.get('courseId')}, classId={questions.get('classId')}")
+        self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId', '')}, workId={questions.get('workId', '')}, totalQuestionNum={questions.get('totalQuestionNum', '')}, courseId={questions.get('courseId', '')}, classId={questions.get('classId', '')}")
 
-        # 6. 执行提交与多重容错重试
+        # 6. 执行提交（与参考实现保持一致：仅在 POST body 中发送 data=questions，绝不在 URL Query 中重复附带 params）
         try:
             self.log(f"[作业] 正在提交答案至: {submit_url}")
-            res = self.session.post(submit_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
+            res = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
             res_json = {}
             try:
                 res_json = res.json()
@@ -1571,6 +1555,7 @@ class AndroidStudyEngine:
 
             # 备用方案 1：切换备用提交接口重试 (如 addStudentWorkNewWeb / work/addStudentWorkNew)
             candidate_endpoints = [
+                f"{origin}/mooc-ans/work/addStudentWorkNew",
                 f"{origin}/mooc-ans/work/addStudentWorkNewWeb",
                 f"{origin}/work/addStudentWorkNewWeb",
                 f"{origin}/work/addStudentWorkNew",
@@ -1580,7 +1565,7 @@ class AndroidStudyEngine:
                     continue
                 self.log(f"[作业] 主接口返回: {msg}，正在尝试备用提交接口: {alt_url}")
                 try:
-                    res_alt = self.session.post(alt_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
+                    res_alt = self.session.post(alt_url, data=questions, headers=submit_headers, timeout=30)
                     res_alt_json = res_alt.json()
                     alt_msg = res_alt_json.get("msg", "")
                     if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
@@ -1594,7 +1579,7 @@ class AndroidStudyEngine:
             self.log("[作业] 正在尝试保存草稿模式 (pyFlag=1)...")
             try:
                 questions["pyFlag"] = "1"
-                res_save = self.session.post(submit_url, params=submit_params, data=questions, headers=submit_headers, timeout=30)
+                res_save = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
                 res_save_json = res_save.json()
                 if res_save_json.get("status") is True:
                     self.log(f"[作业] 保存答题成功 -> {res_save_json.get('msg', '')}")
@@ -1661,12 +1646,17 @@ class AndroidStudyEngine:
     def _extract_form_data(self, soup: BeautifulSoup, html_content: str = "", resp=None, _course=None, _job=None, _job_info=None) -> dict:
         """
         提取表单数据与系统元参数
-        保证 workAnswerId, workId, courseId, classId, totalQuestionNum 等关键参数完整无缺
+        保证 workAnswerId, workId, courseId, classId, totalQuestionNum 等关键参数完整
+        注意：严禁添加别名字段（如 workanswerId, clazzId, courseid），严禁把 workId 赋值给 workAnswerId，
+        否则超星后端解析或校验参数失败会返回 '无效的参数: code-2!'
         """
         form_data = {}
 
-        # 1. 扫描页面中所有 input 控件（包括 form 内部与外部所有 hidden/text 等元素）
-        for input_tag in soup.find_all("input"):
+        # 1. 扫描页面中的 form 控件，与超星前端提交逻辑严格一致
+        form_tag = soup.find("form")
+        inputs = form_tag.find_all("input") if form_tag else soup.find_all("input")
+
+        for input_tag in inputs:
             key = input_tag.attrs.get("name") or input_tag.attrs.get("id")
             if not key:
                 continue
@@ -1677,17 +1667,14 @@ class AndroidStudyEngine:
             val = input_tag.attrs.get("value", "")
             form_data[key] = val
 
-            # 标准字段与别名字段自动同步映射
+            # 标准大小写映射（只保留标准字段，严禁生成别名字段）
             k_lower = key.lower()
             if k_lower == "workanswerid":
                 form_data["workAnswerId"] = val
-                form_data["workanswerId"] = val
             elif k_lower in ("courseid", "course_id"):
                 form_data["courseId"] = val
-                form_data["courseid"] = val
             elif k_lower in ("classid", "clazzid"):
                 form_data["classId"] = val
-                form_data["clazzId"] = val
             elif k_lower == "workid":
                 form_data["workId"] = val
             elif k_lower == "totalquestionnum":
@@ -1696,52 +1683,33 @@ class AndroidStudyEngine:
                 form_data["knowledgeid"] = val
             elif k_lower == "jobid":
                 form_data["jobid"] = val
-            elif k_lower == "oldworkid":
-                form_data["oldWorkId"] = val
-            elif k_lower == "workrelationid":
-                form_data["workRelationId"] = val
             elif k_lower == "enc":
                 form_data["enc"] = val
-            elif k_lower == "fullscore":
-                form_data["fullScore"] = val
 
-        # 2. 从响应 URL 以及重定向历史 URL 中提取 Query 参数（这是 workAnswerId 等最关键的来源）
+        # 2. 从响应 URL 以及重定向历史 URL 中提取 Query 参数（仅提取标准字段）
         if resp:
-            candidate_urls = [getattr(resp, "url", "")]
-            if hasattr(resp, "history"):
-                for h in resp.history:
-                    candidate_urls.append(getattr(h, "url", ""))
-                    loc = getattr(h, "headers", {}).get("Location", "")
-                    if loc:
-                        candidate_urls.append(urllib.parse.urljoin(getattr(h, "url", ""), loc))
-            for u in candidate_urls:
-                if not u:
-                    continue
-                try:
-                    parsed_u = urllib.parse.urlparse(u)
-                    qs = urllib.parse.parse_qs(parsed_u.query)
-                    for qk, qv in qs.items():
-                        if qv and (qk not in form_data or not form_data[qk]):
-                            val = qv[0]
-                            form_data[qk] = val
-                            qk_lower = qk.lower()
-                            if qk_lower == "workanswerid":
-                                form_data["workAnswerId"] = val
-                                form_data["workanswerId"] = val
-                            elif qk_lower in ("courseid", "course_id"):
-                                form_data["courseId"] = val
-                                form_data["courseid"] = val
-                            elif qk_lower in ("classid", "clazzid"):
-                                form_data["classId"] = val
-                                form_data["clazzId"] = val
-                except Exception:
-                    pass
+            try:
+                parsed_u = urllib.parse.urlparse(getattr(resp, "url", ""))
+                qs = urllib.parse.parse_qs(parsed_u.query)
+                for qk, qv in qs.items():
+                    if qv and (qk not in form_data or not form_data[qk]):
+                        val = qv[0]
+                        qk_lower = qk.lower()
+                        if qk_lower == "workanswerid":
+                            form_data["workAnswerId"] = val
+                        elif qk_lower in ("courseid", "course_id") and "courseId" not in form_data:
+                            form_data["courseId"] = val
+                        elif qk_lower in ("classid", "clazzid") and "classId" not in form_data:
+                            form_data["classId"] = val
+                        elif qk_lower == "workid" and "workId" not in form_data:
+                            form_data["workId"] = val
+            except Exception:
+                pass
 
         # 3. 从 JavaScript 变量中正则提取（如 var workAnswerId = '...'）
         scan_vars = [
-            "workAnswerId", "workId", "courseId", "classId", "clazzId",
-            "knowledgeid", "jobid", "enc", "oldWorkId", "totalQuestionNum",
-            "workRelationId", "cpi", "fullScore"
+            "workAnswerId", "workId", "courseId", "classId",
+            "knowledgeid", "jobid", "enc", "totalQuestionNum"
         ]
         for var_name in scan_vars:
             if var_name not in form_data or not form_data[var_name]:
@@ -1751,26 +1719,17 @@ class AndroidStudyEngine:
                     extracted_val = m.group(1) or m.group(2) or m.group(3)
                     if extracted_val and extracted_val not in ("null", "undefined"):
                         form_data[var_name] = extracted_val
-                        if var_name.lower() == "workanswerid":
-                            form_data["workAnswerId"] = extracted_val
-                            form_data["workanswerId"] = extracted_val
 
-        # 4. 从上下文参数中补齐
+        # 4. 从上下文参数补齐 courseId, classId, jobid, enc, knowledgeid
         if _course:
             if not form_data.get("courseId"):
-                form_data["courseId"] = _course.get("courseId", "")
-            if not form_data.get("courseid"):
-                form_data["courseid"] = _course.get("courseId", "")
+                form_data["courseId"] = str(_course.get("courseId", ""))
             if not form_data.get("classId"):
-                form_data["classId"] = _course.get("clazzId", "")
-            if not form_data.get("clazzId"):
-                form_data["clazzId"] = _course.get("clazzId", "")
+                form_data["classId"] = str(_course.get("clazzId", ""))
 
         if _job:
             if not form_data.get("jobid"):
                 form_data["jobid"] = _job.get("jobid", "")
-            if not form_data.get("originJobId"):
-                form_data["originJobId"] = _job.get("jobid", "")
             if not form_data.get("workId"):
                 form_data["workId"] = _job.get("jobid", "").replace("work-", "")
             if not form_data.get("enc"):
@@ -1787,9 +1746,14 @@ class AndroidStudyEngine:
         if not form_data.get("api"):
             form_data["api"] = "1"
 
-        if not form_data.get("workAnswerId"):
-            if form_data.get("workId"):
-                form_data["workAnswerId"] = form_data["workId"]
+        # 注意：绝对不要设置 form_data["workAnswerId"] = form_data["workId"]
+        # workAnswerId 是学生作答记录ID，workId 是作业模板ID，二者完全不同。
+        # 如果未找到 workAnswerId，超星会在首次提交时自动分配新的作答记录ID。
+        # 若强行填入 workId 会导致超星后端校验作答记录失败，报 "无效的参数: code-2!"。
+
+        # 彻底移除所有别名字段，防止后端解析出多值参数导致 code-2
+        for bad_key in ["workanswerId", "clazzId", "courseid", "course_id", "originJobId"]:
+            form_data.pop(bad_key, None)
 
         return form_data
 
@@ -2224,14 +2188,14 @@ class AndroidStudyEngine:
         if not login_success:
             self.log("[错误] 登录失败，无法开始刷课")
             self._running = False
-            return
+            return "login_failed"
 
         # 获取课程列表
         courses = self.get_course_list()
         if not courses:
             self.log("[错误] 未获取到课程列表")
             self._running = False
-            return
+            return "no_courses"
 
         # 过滤课程
         if course_ids:
@@ -2240,14 +2204,17 @@ class AndroidStudyEngine:
             self.log(f"过滤后剩余 {len(courses)} 门课程")
 
         # 逐个处理课程
+        stopped = False
         for course in courses:
             if not self._running:
                 self.log("刷课任务被用户停止")
+                stopped = True
                 break
             self.process_course(course, speed)
 
         self._running = False
         self.log("===== 刷课任务完成 =====")
+        return "stopped" if stopped else "success"
 
 
 # ==================== 全局进度管理 ====================
@@ -2302,7 +2269,7 @@ def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
     import traceback
     global _study_running, _study_result
     _study_running = True
-    _study_result = None
+    _study_result = "running"
 
     try:
         if llm_config:
@@ -2312,8 +2279,15 @@ def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
 
         engine = AndroidStudyEngine(username, password, llm_config=llm_config)
         engine.on_progress = set_study_progress
-        engine.run(course_ids=course_ids, speed=speed, jobs=jobs)
-        _study_result = "success"
+        run_res = engine.run(course_ids=course_ids, speed=speed, jobs=jobs)
+        if run_res == "login_failed":
+            _study_result = "login_failed"
+        elif run_res == "no_courses":
+            _study_result = "no_courses"
+        elif run_res == "stopped":
+            _study_result = "stopped"
+        else:
+            _study_result = "success"
     except Exception as e:
         tb = traceback.format_exc()
         _log(f"[错误] 刷课任务异常: {e}")
@@ -2329,13 +2303,15 @@ def start_study(username, password, course_ids=None, speed=1.0, jobs=4, llm_conf
     与参考实现一致：启动后台线程执行 _run_study_task
     接受 Kotlin 端传入的 llm_config 和 courses_json 参数
     """
-    global _study_running
+    global _study_running, _study_result, _study_progress, _study_log_buffer
     if _study_running:
         _log("[警告] 刷课任务已在运行中")
         return "already_running"
 
-    # 清空实时日志缓冲区与进度
-    global _study_log_buffer
+    # 清空实时日志缓冲区与进度，必须在启动线程前置为 True，防止 Kotlin 轮询时由于线程调度延迟误判为任务已结束
+    _study_running = True
+    _study_result = "running"
+    _study_progress = 0.0
     _study_log_buffer = []
     clear_current_video()
     clear_current_quiz()

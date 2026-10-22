@@ -253,6 +253,9 @@ object PythonBridge {
 
             onLog("刷课任务已启动，开始轮询日志...")
 
+            // 启动前先微等待 500ms，确保 Python 端后台线程初始化完毕
+            Thread.sleep(500)
+
             // 轮询等待刷课任务完成
             var lastProgress = 0f
             var noProgressCount = 0
@@ -282,8 +285,16 @@ object PythonBridge {
                 }
 
                 if (!isRunning) {
-                    onLog("刷课任务已结束")
-                    break
+                    // 二次确认，防止瞬间调度延迟引起误判
+                    Thread.sleep(500)
+                    val doubleCheckRunning = studyModule.callAttr("is_study_running")?.toBoolean() ?: false
+                    if (!doubleCheckRunning) {
+                        val currResult = studyModule.callAttr("get_study_result")?.toString() ?: ""
+                        if (currResult != "running") {
+                            onLog("刷课任务已结束")
+                            break
+                        }
+                    }
                 }
 
                 // 超时保护：如果长时间无进度更新，强制退出
