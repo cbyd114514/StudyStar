@@ -48,6 +48,7 @@ import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -112,6 +113,7 @@ fun DashboardScreen(
     val isLoadingCourses by viewModel.isLoadingCourses.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
     val llmTestState by viewModel.llmTestState.collectAsState()
+    val recentIssues by viewModel.recentIssues.collectAsState()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -119,6 +121,11 @@ fun DashboardScreen(
     var configSpeed by remember { mutableFloatStateOf(studyState.speed.toFloat()) }
     var configJobs by remember { mutableIntStateOf(studyState.jobs) }
     var configCourseIds by remember { mutableStateOf(studyState.courseIds ?: "") }
+
+    // 监听外部配置状态（账号切换时自动同步已保存课程）
+    LaunchedEffect(studyState.courseIds) {
+        configCourseIds = studyState.courseIds ?: ""
+    }
 
     // LLM 配置状态
     var configLlmProvider by remember { mutableStateOf("") }
@@ -129,7 +136,7 @@ fun DashboardScreen(
     var showCourseList by remember { mutableStateOf(false) }
     var showLlmSection by remember { mutableStateOf(false) }
 
-    // 从 studyState.llmConfig 同步
+    // 从 studyState.llmConfig 同步（账号隔离：切换账号时若无配置则清空）
     LaunchedEffect(studyState.llmConfig) {
         val llmConfig = studyState.llmConfig
         if (!llmConfig.isNullOrBlank()) {
@@ -140,6 +147,11 @@ fun DashboardScreen(
                 configLlmKey = json["key"]?.toString() ?: ""
                 configLlmModel = json["model"]?.toString() ?: ""
             } catch (_: Exception) {}
+        } else {
+            configLlmProvider = ""
+            configLlmEndpoint = ""
+            configLlmKey = ""
+            configLlmModel = ""
         }
     }
 
@@ -291,6 +303,114 @@ fun DashboardScreen(
                 }
             }
 
+            // --- 运行问题与重点提醒卡片（轻量展示当前状态与出现的具体问题，绝无冗余日志与晦涩技术错误码） ---
+            item(key = "issues_card", contentType = "card") {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (recentIssues.isEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
+                                contentDescription = null,
+                                tint = if (recentIssues.isEmpty()) StatusSuccess else MaterialTheme.colorScheme.error,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = AppStrings.issuesTitle(currentLang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.weight(1f)
+                            )
+                            if (recentIssues.isNotEmpty()) {
+                                OutlinedButton(
+                                    onClick = { viewModel.clearIssues() },
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(28.dp)
+                                ) {
+                                    Text(AppStrings.clearIssuesBtn(currentLang), fontSize = 11.sp)
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        if (recentIssues.isEmpty()) {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = MaterialTheme.shapes.medium,
+                                color = StatusSuccess.copy(alpha = 0.08f)
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Check,
+                                        contentDescription = null,
+                                        tint = StatusSuccess,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = AppStrings.noIssues(currentLang),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        } else {
+                            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                recentIssues.takeLast(5).reversed().forEach { issue ->
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        shape = MaterialTheme.shapes.medium,
+                                        color = if (issue.type == MainViewModel.LogType.ERROR)
+                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(10.dp),
+                                            verticalAlignment = Alignment.Top
+                                        ) {
+                                            Text(
+                                                text = issue.timestamp,
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(top = 1.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Text(
+                                                text = issue.message,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             // --- 核心参数配置卡片 ---
             item(key = "config_card", contentType = "card") {
                 ElevatedCard(
@@ -353,7 +473,10 @@ fun DashboardScreen(
                         // 指定课程 ID
                         OutlinedTextField(
                             value = configCourseIds,
-                            onValueChange = { configCourseIds = it },
+                            onValueChange = {
+                                configCourseIds = it
+                                viewModel.updateCourseSelection(it)
+                            },
                             label = { Text(AppStrings.customCourseIdLabel(currentLang)) },
                             placeholder = { Text(AppStrings.customCourseIdPlaceholder(currentLang)) },
                             modifier = Modifier.fillMaxWidth(),
@@ -493,22 +616,89 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 虚拟化高性能课程列表项 ---
+            // --- 虚拟化高性能课程列表项（支持多选与一键全选/清空，选后立即默认保存参数） ---
             if (showCourseList && courses.isNotEmpty()) {
+                item(key = "course_multi_actions", contentType = "card") {
+                    val selectedCount = remember(configCourseIds) {
+                        configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.size
+                    }
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                    ) {
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = AppStrings.selectedCoursesSummary(currentLang, selectedCount, courses.size),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedButton(
+                                    onClick = {
+                                        val allIds = courses.joinToString(",") { it.courseId }
+                                        configCourseIds = allIds
+                                        viewModel.updateCourseSelection(allIds)
+                                    },
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(AppStrings.selectAllCourses(currentLang), fontSize = 12.sp)
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        configCourseIds = ""
+                                        viewModel.updateCourseSelection("")
+                                    },
+                                    shape = MaterialTheme.shapes.small,
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    modifier = Modifier.height(32.dp)
+                                ) {
+                                    Text(AppStrings.clearSelectedCourses(currentLang), fontSize = 12.sp)
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = AppStrings.multiSelectTip(currentLang),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
                 items(
                     items = courses,
                     key = { it.courseId },
                     contentType = { "course_item" }
                 ) { course ->
                     val isSelected = remember(configCourseIds, course.courseId) {
-                        configCourseIds.contains(course.courseId)
+                        val ids = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                        ids.contains(course.courseId)
                     }
                     CourseItemCard(
                         course = course,
                         isSelected = isSelected,
                         selectLabel = AppStrings.selectCourse(currentLang),
                         selectedLabel = AppStrings.selectedCourse(currentLang),
-                        onSelect = { configCourseIds = course.courseId }
+                        onSelect = {
+                            val currentIds = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                            if (currentIds.contains(course.courseId)) {
+                                currentIds.remove(course.courseId)
+                            } else {
+                                currentIds.add(course.courseId)
+                            }
+                            val newCourseIds = currentIds.joinToString(",")
+                            configCourseIds = newCourseIds
+                            viewModel.updateCourseSelection(newCourseIds)
+                        }
                     )
                 }
             }
@@ -586,6 +776,9 @@ fun DashboardScreen(
                                         configLlmEndpoint = "https://api.siliconflow.cn/v1/chat/completions"
                                         configLlmModel = "deepseek-ai/DeepSeek-V3"
                                     }
+                                    viewModel.clearLlmTestState()
+                                    val json = buildLlmConfigJson()
+                                    if (json != null) viewModel.saveUserLlmConfig(json)
                                 },
                                 onEndpointChange = {
                                     configLlmEndpoint = it
@@ -599,8 +792,16 @@ fun DashboardScreen(
                                     configLlmModel = it
                                     viewModel.clearLlmTestState()
                                 },
+                                onSaveToAccount = {
+                                    val json = buildLlmConfigJson()
+                                    viewModel.saveUserLlmConfig(json.orEmpty())
+                                },
                                 onTestConnection = {
-                                    viewModel.testLlmConnection(buildLlmConfigJson())
+                                    val json = buildLlmConfigJson()
+                                    if (json != null) {
+                                        viewModel.saveUserLlmConfig(json)
+                                        viewModel.testLlmConnection(json)
+                                    }
                                 }
                             )
                         }
@@ -977,6 +1178,11 @@ private fun CourseItemCard(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Checkbox(
+                checked = isSelected,
+                onCheckedChange = { onSelect() }
+            )
+            Spacer(modifier = Modifier.width(6.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = course.title,
@@ -992,19 +1198,15 @@ private fun CourseItemCard(
             }
             Spacer(modifier = Modifier.width(8.dp))
             if (isSelected) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.CheckCircle,
-                        contentDescription = selectedLabel,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
+                Surface(
+                    shape = MaterialTheme.shapes.extraSmall,
+                    color = MaterialTheme.colorScheme.primary
+                ) {
                     Text(
                         text = selectedLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.Bold
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
             } else {
@@ -1016,7 +1218,7 @@ private fun CourseItemCard(
                         text = selectLabel,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -1036,6 +1238,7 @@ private fun AiConfigForm(
     onEndpointChange: (String) -> Unit,
     onKeyChange: (String) -> Unit,
     onModelChange: (String) -> Unit,
+    onSaveToAccount: () -> Unit,
     onTestConnection: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
@@ -1266,6 +1469,18 @@ private fun AiConfigForm(
         val buttonTextColor = when {
             isLlmSuccess || isLlmFailed -> Color.White
             else -> MaterialTheme.colorScheme.onTertiaryContainer
+        }
+
+        // 保存 API Key 到当前账号（换账号不共享，相同账号下次自动恢复）
+        OutlinedButton(
+            onClick = onSaveToAccount,
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
+            enabled = configLlmProvider.isNotBlank() && configLlmKey.isNotBlank()
+        ) {
+            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(AppStrings.saveApiKeyToAccount(currentLang), fontWeight = FontWeight.SemiBold)
         }
 
         Button(

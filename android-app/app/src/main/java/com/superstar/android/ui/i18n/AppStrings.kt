@@ -116,13 +116,40 @@ object AppStrings {
         if (lang == "zh") "$count 章节" else "$count Chapters"
 
     fun customCourseIdLabel(lang: String): String =
-        if (lang == "zh") "指定课程 ID（留空默认全部刷取）" else "Course IDs (Leave blank for all)"
+        if (lang == "zh") "已选课程 ID（多选）" else "Selected Course IDs (Multi-select)"
 
     fun customCourseIdPlaceholder(lang: String): String =
-        if (lang == "zh") "例如: 22839485, 23948572" else "e.g., 22839485, 23948572"
+        if (lang == "zh") "可在下方课程列表中直接点击多选勾选" else "Select courses from the list below"
 
     fun saveConfigBtn(lang: String): String =
         if (lang == "zh") "保存参数配置" else "Save Parameters"
+
+    fun selectAllCourses(lang: String): String =
+        if (lang == "zh") "全选" else "Select All"
+
+    fun clearSelectedCourses(lang: String): String =
+        if (lang == "zh") "清空" else "Clear"
+
+    fun selectedCoursesSummary(lang: String, selectedCount: Int, totalCount: Int): String =
+        if (lang == "zh") "已选 $selectedCount / $totalCount 门课程" else "Selected $selectedCount / $totalCount courses"
+
+    fun multiSelectTip(lang: String): String =
+        if (lang == "zh") "点击课程即可多选勾选，勾选后自动保存参数" else "Click courses to multi-select. Parameters auto-save."
+
+    fun issuesTitle(lang: String): String =
+        if (lang == "zh") "运行问题与重点提醒" else "Issues & Alerts"
+
+    fun noIssues(lang: String): String =
+        if (lang == "zh") "当前运行状态正常，未检测到任何异常问题" else "Running smoothly, no issues detected."
+
+    fun clearIssuesBtn(lang: String): String =
+        if (lang == "zh") "清除提醒" else "Clear Alerts"
+
+    fun saveApiKeyToAccount(lang: String): String =
+        if (lang == "zh") "保存 API Key 到当前账号" else "Save API Key to Account"
+
+    fun apiKeySaved(lang: String): String =
+        if (lang == "zh") "已保存至当前账号" else "Saved to Account"
 
     fun courseSelection(lang: String): String =
         if (lang == "zh") "课程选择" else "Course Selection"

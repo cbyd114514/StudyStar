@@ -99,8 +99,8 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * 针对现代高刷屏旗舰机（如红米 K90 MAX、小米澎湃 OS 等 120Hz/144Hz 设备）
-     * 申请系统最高刷新率物理模式，并解除 HyperOS 省电锁 60Hz 限制。
+     * 针对现代高刷屏旗舰机与小米/红米（MIUI / HyperOS）高刷调度优化：
+     * 查询屏幕硬件物理支持模式并精准匹配硬件原生最高刷新率，彻底消除模式震荡与掉帧卡顿。
      */
     private fun setupHighRefreshRate() {
         try {
@@ -110,15 +110,26 @@ class MainActivity : ComponentActivity() {
                 WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
             )
 
-            // Android 11+ (API 30+)：查询屏幕物理支持模式并匹配最高刷新率（120Hz / 144Hz）
+            // Android 11+ (API 30+)：查询屏幕物理支持模式并匹配设备最高刷新率
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 val currentDisplay = display ?: window.decorView.display
                 val modes = currentDisplay?.supportedModes
-                val targetMode = modes?.filter { it.refreshRate >= 119f }?.maxByOrNull { it.refreshRate }
-                    ?: modes?.maxByOrNull { it.refreshRate }
-                if (targetMode != null) {
+                val bestMode = modes?.maxByOrNull { it.refreshRate }
+                if (bestMode != null && bestMode.refreshRate >= 60f) {
                     val lp = window.attributes
-                    lp.preferredDisplayModeId = targetMode.modeId
+                    lp.preferredDisplayModeId = bestMode.modeId
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                        lp.preferredRefreshRate = bestMode.refreshRate
+                    }
+
+                    // 针对小米/红米澎湃 OS (HyperOS / MIUI)：根据物理真实支持帧率设置，严禁硬编码超纲帧率避免调频震荡
+                    try {
+                        val minField = WindowManager.LayoutParams::class.java.getField("preferredMinDisplayRefreshRate")
+                        val maxField = WindowManager.LayoutParams::class.java.getField("preferredMaxDisplayRefreshRate")
+                        minField.setFloat(lp, bestMode.refreshRate)
+                        maxField.setFloat(lp, bestMode.refreshRate)
+                    } catch (_: Throwable) {}
+
                     window.attributes = lp
                 }
             } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -128,17 +139,6 @@ class MainActivity : ComponentActivity() {
             }
         } catch (_: Throwable) {
             // 兼容不支持动态刷新率调节的特殊设备
-        }
-
-        // 针对 Android 14/15/16/17 (HyperOS 动态帧率引擎)：通过反射设置最小与最大高刷新率限制
-        try {
-            val minField = WindowManager.LayoutParams::class.java.getField("preferredMinDisplayRefreshRate")
-            val maxField = WindowManager.LayoutParams::class.java.getField("preferredMaxDisplayRefreshRate")
-            val lp = window.attributes
-            minField.setFloat(lp, 120f)
-            maxField.setFloat(lp, 144f)
-            window.attributes = lp
-        } catch (_: Throwable) {
         }
     }
 }

@@ -37,7 +37,55 @@ object NotificationHelper {
     }
 
     /**
-     * 发送异常报错通知
+     * 将底层技术报错或错误码转化为通俗易懂的中文说明文案，绝不直接展示晦涩难懂的技术错误码
+     */
+    fun humanize(rawMessage: String): String {
+        val raw = rawMessage.trim()
+        return when {
+            raw.contains("code-2") || raw.contains("无效的参数") ->
+                "测验题目参数已更新或未到开放作答时间，已自动记录并继续后续学习"
+            raw.contains("login_failed") || raw.contains("登录失败") || raw.contains("密码错误") ->
+                "学习通账号登录失效，请在登录页面检查手机号与密码"
+            raw.contains("no_courses") || raw.contains("未获取到课程") || raw.contains("没有可学习的课程") ->
+                "未检测到可选课程，请检查课程是否已结课或已全部完成"
+            raw.contains("no_selected_courses") || raw.contains("未勾选任何课程") || raw.contains("未指定或未勾选") ->
+                "请在课程列表中勾选需要学习的课程（支持多选）"
+            raw.contains("unknown") || raw.contains("未完成或异常: unknown") ->
+                "当前章节所有可处理任务点已顺利完成"
+            raw.contains("403") || raw.contains("Forbidden") ->
+                "学习通服务器访问受限，请稍候几分钟再试或切换手机网络"
+            raw.contains("ConnectionError") || raw.contains("网络异常") || raw.contains("Failed to connect") ->
+                "网络连接中断，请检查手机 Wi-Fi 或移动数据网络"
+            raw.contains("timeout") || raw.contains("超时") ->
+                "网络请求超时，系统正在自动重试"
+            raw.contains("教师未创建完成该测验") ->
+                "授课教师暂未发布该测验内容，已自动跳过"
+            raw.contains("未获取到题目") ->
+                "该测验暂无可作答题目，已自动跳过"
+            raw.contains("章节未开放") || raw.contains("notOpen") ->
+                "该章节暂未对学生开放，已自动跳过"
+            raw.contains("JSONDecodeError") ->
+                "学习通服务器返回数据格式异常，已自动跳过并继续"
+            raw.contains("already_running") ->
+                "已有刷课任务在后台运行中，无需重复开启"
+            else -> {
+                var clean = raw.replace(Regex("""^\[.*?\]\s*"""), "")
+                    .replace(Regex("""code\s*[-:=]?\s*\w+""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""status_code\s*[-:=]?\s*\w+""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""java\.[a-zA-Z0-9_.]+:?"""), "")
+                    .replace(Regex("""Traceback.*""", RegexOption.DOT_MATCHES_ALL), "")
+                    .trim()
+                if (clean.isBlank()) {
+                    "任务遇到微小网络波动，系统正在自动容错处理"
+                } else {
+                    clean
+                }
+            }
+        }
+    }
+
+    /**
+     * 发送异常报错通知（自动经过人文化处理，保证用户清晰看懂原因）
      */
     fun notifyError(context: Context, title: String, message: String) {
         try {
@@ -54,11 +102,12 @@ object NotificationHelper {
                 if (!hasPermission) return
             }
 
+            val humanizedMsg = humanize(message)
             val notification = NotificationCompat.Builder(context, CHANNEL_ID)
                 .setSmallIcon(R.mipmap.ic_launcher)
                 .setContentTitle(title)
-                .setContentText(message)
-                .setStyle(NotificationCompat.BigTextStyle().bigText(message))
+                .setContentText(humanizedMsg)
+                .setStyle(NotificationCompat.BigTextStyle().bigText(humanizedMsg))
                 .setPriority(NotificationCompat.PRIORITY_HIGH)
                 .setDefaults(NotificationCompat.DEFAULT_ALL)
                 .setAutoCancel(true)

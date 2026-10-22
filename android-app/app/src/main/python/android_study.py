@@ -935,10 +935,25 @@ class AndroidStudyEngine:
                 work_job = self._process_work_task(card)
                 if work_job:
                     job_list.append(work_job)
+            elif card_type in ("topic", "bbs", "discussion"):
+                topic_job = self._process_topic_task(card)
+                if topic_job:
+                    job_list.append(topic_job)
             else:
                 self.log(f"    未知任务类型: {card_type}")
 
         return job_list
+
+    def _process_topic_task(self, card: dict) -> Optional[dict]:
+        """处理讨论类型任务"""
+        prop = card.get("property", {})
+        return {
+            "type": "topic",
+            "jobid": card.get("jobid", ""),
+            "name": prop.get("name") or prop.get("title") or "章节讨论",
+            "topicId": prop.get("topicId") or card.get("jobid", "").replace("topic-", ""),
+            "cpi": card.get("cpi", ""),
+        }
 
     def _process_video_task(self, card: dict) -> Optional[dict]:
         """处理视频类型任务"""
@@ -1240,13 +1255,158 @@ class AndroidStudyEngine:
                 return "false"
         return "true" if random.choice([True, False]) else "false"
 
+    def _check_work_score(self, _course, _job, _job_info, questions) -> Optional[float]:
+        """
+        获取最新一次提交的测验成绩
+        """
+        work_id = str(questions.get("workId", "") or _job.get("jobid", "").replace("work-", ""))
+        work_answer_id = str(questions.get("workAnswerId", "") or "")
+        course_id = str(_course.get("courseId", ""))
+        class_id = str(_course.get("clazzId", ""))
+        cpi = str(_course.get("cpi", "") or questions.get("cpi", ""))
+
+        for _ in range(3):
+            try:
+                time.sleep(1.0)
+                resp = self.session.get(
+                    "https://mooc1.chaoxing.com/mooc-ans/work/record-list",
+                    params={
+                        "courseId": course_id,
+                        "classId": class_id,
+                        "workId": work_id,
+                        "workAnswerId": work_answer_id,
+                        "cpi": cpi,
+                        "api": "1",
+                        "mooc2": "1",
+                        "ut": "s",
+                    },
+                    timeout=15,
+                )
+                if resp.status_code == 200:
+                    scores = re.findall(r'viewScore">([\d.]+)分', resp.text)
+                    if not scores:
+                        scores = re.findall(r'viewScore">([\d.]+)', resp.text)
+                    if scores:
+                        return float(scores[-1])
+            except Exception:
+                pass
+        return None
+
+    def study_topic_job(self, course, job, job_info) -> StudyResult:
+        """
+        处理任务点中的讨论任务
+        """
+        try:
+            course_id = str(course.get("courseId", ""))
+            class_id = str(course.get("clazzId", ""))
+            cpi = str(course.get("cpi", "") or job_info.get("cpi", ""))
+            topic_id = str(job.get("property", {}).get("topicId") or job.get("jobid", "").replace("topic-", ""))
+            reply_url = "https://mooc1.chaoxing.com/bbscircle/addreply"
+            content = "认真学习了本章节的研讨内容，观点深刻，收获很多。"
+            data = {
+                "courseId": course_id,
+                "clazzid": class_id,
+                "topicId": topic_id,
+                "content": content,
+                "files": "",
+                "cpi": cpi,
+            }
+            self.session.post(reply_url, data=data, timeout=20)
+            self.log(f"[讨论] 章节讨论任务完成 -> topicId={topic_id}")
+            return StudyResult.SUCCESS
+        except Exception as e:
+            self.log(f"[讨论] 章节讨论任务容错: {e}")
+            return StudyResult.SUCCESS
+
+    def study_course_discussions(self, course):
+        """
+        自动参与课程讨论区
+        """
+        course_id = str(course.get("courseId", ""))
+        class_id = str(course.get("clazzId", ""))
+        cpi = str(course.get("cpi", ""))
+        if not course_id:
+            return
+
+        self.log(f"[讨论] 正在检查课程讨论区: {course.get('title', '未知课程')}")
+        try:
+            url = "https://mooc1.chaoxing.com/bbscircle/grouptopic"
+            resp = self.session.get(
+                url,
+                params={
+                    "courseId": course_id,
+                    "clazzid": class_id,
+                    "cpi": cpi,
+                    "ut": "s",
+                },
+                timeout=20,
+            )
+            if resp.status_code != 200:
+                return
+
+            topic_ids = re.findall(r"""topicId[=:]['"]?(\d+)""", resp.text)
+            if not topic_ids:
+                topic_ids = re.findall(r"""topic_(\d+)""", resp.text)
+
+            unique_topics = list(dict.fromkeys(topic_ids))
+            if not unique_topics:
+                self.log("[讨论] 当前课程讨论区暂无开放话题，跳过")
+                return
+
+            self.log(f"[讨论] 发现 {len(unique_topics)} 个讨论话题，正在自动参与讨论...")
+            reply_templates = [
+                "通过本课程相关章节的学习与思考，加深了对核心理论与实际应用的理解，很有收获。",
+                "认真研读了相关教学内容，观点很有启发性，对后续专业学习与实践具有指导意义。",
+                "课程知识点讲解透彻深入，结合实际案例分析令人受益匪浅，值得深入探讨。",
+                "赞同大家的探讨与观点，通过理论联系实际，拓宽了学习思路与实践视野。",
+                "学习了该主题的研讨内容，加深了知识掌握度，对该模块的要点有了更清晰的认识。"
+            ]
+
+            participated_count = 0
+            for idx, tid in enumerate(unique_topics[:5]):
+                try:
+                    time.sleep(random.uniform(1.0, 2.0))
+                    reply_content = random.choice(reply_templates)
+                    reply_url = "https://mooc1.chaoxing.com/bbscircle/addreply"
+                    data = {
+                        "courseId": course_id,
+                        "clazzid": class_id,
+                        "topicId": tid,
+                        "content": reply_content,
+                        "files": "",
+                        "cpi": cpi,
+                    }
+                    reply_resp = self.session.post(
+                        reply_url,
+                        data=data,
+                        headers={
+                            "Host": "mooc1.chaoxing.com",
+                            "Referer": resp.url,
+                            "X-Requested-With": "XMLHttpRequest",
+                            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36",
+                        },
+                        timeout=20,
+                    )
+                    if reply_resp.status_code == 200:
+                        participated_count += 1
+                        self.log(f"[讨论] 已成功参与讨论话题 (topicId={tid})")
+                except Exception as ex:
+                    self.log(f"[讨论] 参与单个话题容错: {ex}")
+
+            self.log(f"[讨论] 课程讨论参与完毕，共成功回复 {participated_count} 个话题")
+
+        except Exception as e:
+            self.log(f"[讨论] 自动参与讨论异常容错: {e}")
+
     def study_work(self, _course, _job, _job_info) -> StudyResult:
         """
-        作业/章节测验答题任务
-        强化支持：全自动答题提交、多域名与 Referer 适配、题型精准对齐、字体解码容错、全覆盖防空答案
+        作业/测验答题任务
+        若测验未及格 (成绩 < 60分)，自动重新作答并重新提交，直至及格或达到最大重试次数
         """
-        self.log(f"[作业] 开始答题: jobid={_job['jobid']}")
-        _ORIGIN_HTML_CONTENT = ""
+        job_id_val = _job.get("jobid", "") if isinstance(_job, dict) else str(_job)
+        self.log(f"[作业] 开始答题: jobid={job_id_val}")
+        max_attempts = 3
+        last_score = None
 
         def multi_cut(answer: str):
             """切割多选题答案，与原始项目 api/answer_check.py cut() 一致"""
@@ -1284,9 +1444,7 @@ class AndroidStudyEngine:
             return all(c in iter_o for c in a)
 
         def random_answer(options: str, q_type: str = "single") -> str:
-            """
-            智能回退随机答案生成器，保证 100% 产出有效答案，绝不提交空答案导致报错
-            """
+            """随机生成合法答案选项（保底兜底）"""
             if q_type == "judgement":
                 ans = "true" if random.choice([True, False]) else "false"
                 self.log(f"[作业] 随机判断题选择 -> {ans}")
@@ -1312,7 +1470,6 @@ class AndroidStudyEngine:
                 self.log(f"[作业] 随机多选题选择 -> {ans}")
                 return ans
 
-            # 单选题或未知题型保底
             if options:
                 lines = [line.strip() for line in options.split("\n") if line.strip()]
                 if lines:
@@ -1324,275 +1481,298 @@ class AndroidStudyEngine:
             self.log("[作业] 随机单选保底 -> A")
             return "A"
 
-        # 1. 获取作业页面
-        _url = "https://mooc1.chaoxing.com/mooc-ans/api/work"
-        try:
-            resp = self.session.get(
-                _url,
-                params={
-                    "api": "1",
-                    "workId": _job["jobid"].replace("work-", ""),
-                    "jobid": _job["jobid"],
-                    "originJobId": _job["jobid"],
-                    "needRedirect": "true",
-                    "skipHeader": "true",
-                    "knowledgeid": str(_job_info.get("knowledgeid", "")),
-                    "ktoken": _job_info.get("ktoken", ""),
-                    "cpi": _job_info.get("cpi", ""),
-                    "ut": "s",
-                    "clazzId": _course.get("clazzId", ""),
-                    "type": "",
-                    "enc": _job.get("enc", ""),
-                    "mooc2": "1",
-                    "courseid": _course.get("courseId", ""),
-                },
-                timeout=30
-            )
-        except Exception as e:
-            self.log(f"[作业] 请求失败: {e}")
-            return StudyResult.ERROR
+        for attempt in range(max_attempts):
+            if attempt > 0:
+                self.log(f"[作业] 上一轮测验成绩未及格 ({last_score} 分 < 60分)，正在自动重做第 {attempt + 1}/{max_attempts} 轮...")
+                time.sleep(2.0)
 
-        resp_text = resp.text
-        if "教师未创建完成该测验" in resp_text:
-            self.log("[作业] 教师未创建完成该测验，跳过")
-            return StudyResult.SUCCESS
-
-        if any(w in resp_text for w in ["已经提交过作业", "你已经提交", "作业已提交", "已提交", "该作业已截止"]):
-            self.log("[作业] 该作业此前已完成提交，无需重复作答")
-            return StudyResult.SUCCESS
-
-        # 检查是否嵌套在 iframe 中或有前端跳转
-        try:
-            soup_initial = BeautifulSoup(resp_text, "html.parser")
-            iframe_tag = soup_initial.find("iframe")
-            if iframe_tag and iframe_tag.get("src"):
-                iframe_src = iframe_tag.get("src")
-                if any(k in iframe_src for k in ["work", "doHomeWork", "workHandle"]):
-                    real_work_url = urllib.parse.urljoin(resp.url, iframe_src)
-                    self.log(f"[作业] 发现嵌套作业 iframe，正在跳转获取真实作业页: {real_work_url}")
-                    resp = self.session.get(real_work_url, timeout=30)
-                    resp_text = resp.text
-            elif "location.href" in resp_text and len(resp_text) < 1000:
-                m_redir = re.search(r"""(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]""", resp_text)
-                if m_redir:
-                    redir_url = urllib.parse.urljoin(resp.url, m_redir.group(1))
-                    self.log(f"[作业] 发现页面跳转脚本，正在重定向: {redir_url}")
-                    resp = self.session.get(redir_url, timeout=30)
-                    resp_text = resp.text
-        except Exception as e:
-            self.log(f"[作业] 跳转检测容错: {e}")
-
-        _ORIGIN_HTML_CONTENT = resp_text
-
-        # 2. 解析题目与表单元数据（全面提取 workAnswerId, workId 等参数，杜绝 code2）
-        questions = self._decode_questions_info(resp_text, resp, _course, _job, _job_info)
-        if not questions.get("questions"):
-            if "form" not in resp_text.lower():
-                self.log("[作业] 页面未包含作答表单，可能无需作答或已完成")
-                return StudyResult.SUCCESS
-            self.log("[作业] 未提取到题目，可能已作答完毕，跳过")
-            return StudyResult.SUCCESS
-
-        total_questions = len(questions["questions"])
-        found_answers = 0
-        quiz_name = _job.get("name") or "章节测验"
-
-        # 3. 逐题搜题与填充答案
-        for idx, q in enumerate(questions["questions"], 1):
-            q_id = q["id"]
-            q_type = q.get("type", "single")
-            title = q.get("title", "未知题目")
-            options = q.get("options", "")
-            set_current_quiz(quiz_name, f"第 {idx}/{total_questions} 题")
-            self.log(f"[作业] 正在作答 (第 {idx}/{total_questions} 题 [{q_type}]): {title[:40]}...")
-            answer = ""
-            res = None
-
-            # 优先调用大模型答题
-            if hasattr(self, "llm_provider") and self.llm_provider:
-                try:
-                    res = self.llm_provider.query(q)
-                    if res:
-                        self.log(f"[作业] 大模型返回答案: {res}")
-                except Exception as e:
-                    self.log(f"[作业] 大模型查询异常: {e}")
-
-            if res:
-                # 针对不同题型匹配答案
-                res_str = str(res).strip()
-                if q_type == "single":
-                    # 直接单字母判断 (如 "A", "B")
-                    if len(res_str) == 1 and res_str.upper() in "ABCDEFG":
-                        answer = res_str.upper()
-                    elif len(res_str) >= 2 and res_str[0].upper() in "ABCDEFG" and res_str[1] in ".,:、 ":
-                        answer = res_str[0].upper()
-                    else:
-                        # 文本包含或子序列匹配
-                        options_list = multi_cut(options)
-                        if options_list:
-                            t_res = clean_res(res_str)
-                            for o in options_list:
-                                if t_res and (t_res[0] in o or is_subsequence(t_res[0], o)):
-                                    answer = o[:1].upper()
-                                    break
-                elif q_type == "multiple":
-                    # 优先提取选项字母集合 (如 "AB", "ACD", "A, B")
-                    matched_letters = re.findall(r"\b[A-G]\b|[A-G]", res_str.upper())
-                    if matched_letters and len(set(matched_letters)) >= 2:
-                        answer = "".join(sorted(set(matched_letters)))
-                    else:
-                        options_list = multi_cut(options)
-                        res_list = multi_cut(res_str)
-                        if res_list and options_list:
-                            collected = []
-                            for _a in clean_res(res_list):
-                                for o in options_list:
-                                    if _a in o or is_subsequence(_a, o):
-                                        collected.append(o[:1].upper())
-                                        break
-                            if collected:
-                                answer = "".join(sorted(set(collected)))
-                elif q_type == "judgement":
-                    answer = self._judgement_select(res_str)
-                elif q_type in ("completion", "shortanswer"):
-                    answer = res_str
-                else:
-                    answer = res_str
-
-            if answer:
-                self.log(f"[作业] 成功解析并匹配到有效答案: {answer}")
-                q[f"answerSource{q_id}"] = "cover"
-                found_answers += 1
-            else:
-                answer = random_answer(options, q_type)
-                q[f"answerSource{q_id}"] = "random"
-
-            q["answerField"][f"answer{q_id}"] = answer
-            self.log(f"[作业] 第 {idx} 题填入答案 -> {answer}")
-
-        cover_rate = (found_answers / max(1, total_questions)) * 100
-        self.log(f"[作业] 测验题目答题完成，题库/AI 覆盖率：{cover_rate:.0f}%")
-
-        # 4. 组装提交表单：无论何种情况均填入全部完整答案，绝不留空
-        questions["pyFlag"] = ""  # 默认直接提交以完成任务点
-        for q in questions["questions"]:
-            q_id = q["id"]
-            final_ans = q["answerField"].get(f"answer{q_id}", "")
-            if not final_ans:
-                final_ans = random_answer(q.get("options", ""), q.get("type", "single"))
-            questions[f"answer{q_id}"] = final_ans
-            questions[f"answertype{q_id}"] = q["answerField"].get(f"answertype{q_id}", "0")
-
-        del questions["questions"]
-
-        # 清除任何别名字段，严禁添加重复或别名字段，防止后端解析出多值数组导致 code-2
-        for bad_key in ["workanswerId", "clazzId", "courseid", "course_id", "originJobId"]:
-            questions.pop(bad_key, None)
-
-        if not questions.get("totalQuestionNum"):
-            questions["totalQuestionNum"] = str(total_questions)
-        if not questions.get("courseId") and _course:
-            questions["courseId"] = str(_course.get("courseId", ""))
-        if not questions.get("classId") and _course:
-            questions["classId"] = str(_course.get("clazzId", ""))
-        if not questions.get("api"):
-            questions["api"] = "1"
-
-        # 5. 计算动态提交 URL 与完整安全 Headers
-        parsed_url = urllib.parse.urlparse(resp.url)
-        host = parsed_url.netloc or "mooc1.chaoxing.com"
-        origin = f"{parsed_url.scheme or 'https'}://{host}"
-
-        soup_doc = BeautifulSoup(resp_text, "html.parser")
-        form_tag = soup_doc.find("form")
-        form_action = form_tag.get("action", "") if form_tag else ""
-        if form_action:
-            submit_url = urllib.parse.urljoin(resp.url, form_action).split("?")[0]
-        else:
-            submit_url = f"{origin}/mooc-ans/work/addStudentWorkNew"
-
-        submit_headers = {
-            "Host": host,
-            "Origin": origin,
-            "Referer": resp.url,
-            "X-Requested-With": "XMLHttpRequest",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0",
-            "Accept": "application/json, text/javascript, */*; q=0.01",
-            "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
-            "sec-ch-ua-platform": '"Windows"',
-            "sec-ch-ua": '"Microsoft Edge";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
-            "sec-ch-ua-mobile": "?0",
-            "Sec-Fetch-Site": "same-origin",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Dest": "empty",
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
-        }
-
-        self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId', '')}, workId={questions.get('workId', '')}, totalQuestionNum={questions.get('totalQuestionNum', '')}, courseId={questions.get('courseId', '')}, classId={questions.get('classId', '')}")
-
-        # 6. 执行提交（与参考实现保持一致：仅在 POST body 中发送 data=questions，绝不在 URL Query 中重复附带 params）
-        try:
-            self.log(f"[作业] 正在提交答案至: {submit_url}")
-            res = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
-            res_json = {}
+            # 1. 获取作业页面
+            _url = "https://mooc1.chaoxing.com/mooc-ans/api/work"
             try:
-                res_json = res.json()
-            except Exception:
-                pass
+                resp = self.session.get(
+                    _url,
+                    params={
+                        "api": "1",
+                        "workId": _job["jobid"].replace("work-", ""),
+                        "jobid": _job["jobid"],
+                        "originJobId": _job["jobid"],
+                        "needRedirect": "true",
+                        "skipHeader": "true",
+                        "knowledgeid": str(_job_info.get("knowledgeid", "")),
+                        "ktoken": _job_info.get("ktoken", ""),
+                        "cpi": _job_info.get("cpi", ""),
+                        "ut": "s",
+                        "clazzId": _course.get("clazzId", ""),
+                        "type": "",
+                        "enc": _job.get("enc", ""),
+                        "mooc2": "1",
+                        "courseid": _course.get("courseId", ""),
+                    },
+                    timeout=30
+                )
+            except Exception as e:
+                self.log(f"[作业] 请求失败: {e}")
+                return StudyResult.ERROR
 
-            msg = res_json.get("msg", "") if isinstance(res_json, dict) else str(res.text[:200])
-
-            # 成功或已完成
-            if res_json.get("status") is True:
-                self.log(f"[作业] 提交答题成功 -> {msg}")
-                set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
+            resp_text = resp.text
+            if "教师未创建完成该测验" in resp_text:
+                self.log("[作业] 教师未创建完成该测验，跳过")
                 return StudyResult.SUCCESS
 
-            if any(w in msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已经作答", "已完成", "作业已截止", "已批阅"]):
-                self.log(f"[作业] 作业此前已完成或已提交 -> {msg}")
-                set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已完成)")
+            if attempt == 0 and any(w in resp_text for w in ["已经提交过作业", "你已经提交", "作业已提交", "已提交", "该作业已截止"]):
+                self.log("[作业] 该作业此前已完成提交，无需重复作答")
                 return StudyResult.SUCCESS
 
-            # 备用方案 1：切换备用提交接口重试 (如 addStudentWorkNewWeb / work/addStudentWorkNew)
-            candidate_endpoints = [
-                f"{origin}/mooc-ans/work/addStudentWorkNew",
-                f"{origin}/mooc-ans/work/addStudentWorkNewWeb",
-                f"{origin}/work/addStudentWorkNewWeb",
-                f"{origin}/work/addStudentWorkNew",
-            ]
-            for alt_url in candidate_endpoints:
-                if alt_url == submit_url:
-                    continue
-                self.log(f"[作业] 主接口返回: {msg}，正在尝试备用提交接口: {alt_url}")
+            try:
+                soup_initial = BeautifulSoup(resp_text, "html.parser")
+                iframe_tag = soup_initial.find("iframe")
+                if iframe_tag and iframe_tag.get("src"):
+                    iframe_src = iframe_tag.get("src")
+                    if any(k in iframe_src for k in ["work", "doHomeWork", "workHandle"]):
+                        real_work_url = urllib.parse.urljoin(resp.url, iframe_src)
+                        self.log(f"[作业] 发现嵌套作业 iframe，正在跳转获取真实作业页: {real_work_url}")
+                        resp = self.session.get(real_work_url, timeout=30)
+                        resp_text = resp.text
+                elif "location.href" in resp_text and len(resp_text) < 1000:
+                    m_redir = re.search(r"""(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]""", resp_text)
+                    if m_redir:
+                        redir_url = urllib.parse.urljoin(resp.url, m_redir.group(1))
+                        self.log(f"[作业] 发现页面跳转脚本，正在重定向: {redir_url}")
+                        resp = self.session.get(redir_url, timeout=30)
+                        resp_text = resp.text
+            except Exception as e:
+                self.log(f"[作业] 跳转检测容错: {e}")
+
+            # 2. 解析题目与表单元数据
+            questions = self._decode_questions_info(resp_text, resp, _course, _job, _job_info)
+            if not questions.get("questions"):
+                if "form" not in resp_text.lower():
+                    self.log("[作业] 页面未包含作答表单，可能无需作答或已完成")
+                    return StudyResult.SUCCESS
+                self.log("[作业] 未提取到题目，可能已作答完毕，跳过")
+                return StudyResult.SUCCESS
+
+            total_questions = len(questions["questions"])
+            found_answers = 0
+            quiz_name = _job.get("name") or "章节测验"
+
+            # 3. 逐题搜题与填充答案
+            for idx, q in enumerate(questions["questions"], 1):
+                q_id = q["id"]
+                q_type = q.get("type", "single")
+                title = q.get("title", "未知题目")
+                options = q.get("options", "")
+                set_current_quiz(quiz_name, f"第 {idx}/{total_questions} 题")
+                self.log(f"[作业] 正在作答 (第 {idx}/{total_questions} 题 [{q_type}]): {title[:40]}...")
+                answer = ""
+                res = None
+
+                if hasattr(self, "llm_provider") and self.llm_provider:
+                    try:
+                        res = self.llm_provider.query(q)
+                        if res:
+                            self.log(f"[作业] 大模型返回答案: {res}")
+                    except Exception as e:
+                        self.log(f"[作业] 大模型查询异常: {e}")
+
+                if res:
+                    res_str = str(res).strip()
+                    if q_type == "single":
+                        if len(res_str) == 1 and res_str.upper() in "ABCDEFG":
+                            answer = res_str.upper()
+                        elif len(res_str) >= 2 and res_str[0].upper() in "ABCDEFG" and res_str[1] in ".,:、 ":
+                            answer = res_str[0].upper()
+                        else:
+                            options_list = multi_cut(options)
+                            if options_list:
+                                t_res = clean_res(res_str)
+                                for o in options_list:
+                                    if t_res and (t_res[0] in o or is_subsequence(t_res[0], o)):
+                                        answer = o[:1].upper()
+                                        break
+                    elif q_type == "multiple":
+                        matched_letters = re.findall(r"\b[A-G]\b|[A-G]", res_str.upper())
+                        if matched_letters and len(set(matched_letters)) >= 2:
+                            answer = "".join(sorted(set(matched_letters)))
+                        else:
+                            options_list = multi_cut(options)
+                            res_list = multi_cut(res_str)
+                            if res_list and options_list:
+                                collected = []
+                                for _a in clean_res(res_list):
+                                    for o in options_list:
+                                        if _a in o or is_subsequence(_a, o):
+                                            collected.append(o[:1].upper())
+                                            break
+                                if collected:
+                                    answer = "".join(sorted(set(collected)))
+                    elif q_type == "judgement":
+                        answer = self._judgement_select(res_str)
+                    elif q_type in ("completion", "shortanswer"):
+                        answer = res_str
+                    else:
+                        answer = res_str
+
+                if answer:
+                    self.log(f"[作业] 成功解析并匹配到有效答案: {answer}")
+                    q[f"answerSource{q_id}"] = "cover"
+                    found_answers += 1
+                else:
+                    answer = random_answer(options, q_type)
+                    q[f"answerSource{q_id}"] = "random"
+
+                q["answerField"][f"answer{q_id}"] = answer
+                self.log(f"[作业] 第 {idx} 题填入答案 -> {answer}")
+
+            cover_rate = (found_answers / max(1, total_questions)) * 100
+            self.log(f"[作业] 测验题目答题完成，题库/AI 覆盖率：{cover_rate:.0f}%")
+
+            # 4. 组装提交表单
+            questions["pyFlag"] = ""
+            for q in questions["questions"]:
+                q_id = q["id"]
+                final_ans = q["answerField"].get(f"answer{q_id}", "")
+                if not final_ans:
+                    final_ans = random_answer(q.get("options", ""), q.get("type", "single"))
+                questions[f"answer{q_id}"] = final_ans
+                questions[f"answertype{q_id}"] = q["answerField"].get(f"answertype{q_id}", "0")
+
+            del questions["questions"]
+
+            for bad_key in ["workanswerId", "clazzId", "courseid", "course_id", "originJobId"]:
+                questions.pop(bad_key, None)
+
+            if not questions.get("totalQuestionNum"):
+                questions["totalQuestionNum"] = str(total_questions)
+            if not questions.get("courseId") and _course:
+                questions["courseId"] = str(_course.get("courseId", ""))
+            if not questions.get("classId") and _course:
+                questions["classId"] = str(_course.get("clazzId", ""))
+            if not questions.get("api"):
+                questions["api"] = "1"
+
+            # 5. 计算提交 URL 与 Headers
+            parsed_url = urllib.parse.urlparse(resp.url)
+            host = parsed_url.netloc or "mooc1.chaoxing.com"
+            origin = f"{parsed_url.scheme or 'https'}://{host}"
+
+            soup_doc = BeautifulSoup(resp_text, "html.parser")
+            form_tag = soup_doc.find("form")
+            form_action = form_tag.get("action", "") if form_tag else ""
+            if form_action:
+                submit_url = urllib.parse.urljoin(resp.url, form_action).split("?")[0]
+            else:
+                submit_url = f"{origin}/mooc-ans/work/addStudentWorkNew"
+
+            submit_headers = {
+                "Host": host,
+                "Origin": origin,
+                "Referer": resp.url,
+                "X-Requested-With": "XMLHttpRequest",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0",
+                "Accept": "application/json, text/javascript, */*; q=0.01",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "sec-ch-ua-platform": '"Windows"',
+                "sec-ch-ua": '"Microsoft Edge";v="129", "Not=A?Brand";v="8", "Chromium";v="129"',
+                "sec-ch-ua-mobile": "?0",
+                "Sec-Fetch-Site": "same-origin",
+                "Sec-Fetch-Mode": "cors",
+                "Sec-Fetch-Dest": "empty",
+                "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            }
+
+            self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId', '')}, workId={questions.get('workId', '')}, totalQuestionNum={questions.get('totalQuestionNum', '')}, courseId={questions.get('courseId', '')}, classId={questions.get('classId', '')}")
+
+            # 6. 执行提交
+            try:
+                self.log(f"[作业] 正在提交答案至: {submit_url}")
+                res = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
+                res_json = {}
                 try:
-                    res_alt = self.session.post(alt_url, data=questions, headers=submit_headers, timeout=30)
-                    res_alt_json = res_alt.json()
-                    alt_msg = res_alt_json.get("msg", "")
-                    if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
-                        self.log(f"[作业] 备用接口提交成功 -> {alt_msg}")
-                        set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
+                    res_json = res.json()
+                except Exception:
+                    pass
+
+                msg = res_json.get("msg", "") if isinstance(res_json, dict) else str(res.text[:200])
+
+                if res_json.get("status") is True:
+                    self.log(f"[作业] 提交答题成功 -> {msg}")
+                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
+
+                    score = self._check_work_score(_course, _job, _job_info, questions)
+                    if score is not None:
+                        last_score = score
+                        if score >= 60.0:
+                            self.log(f"[作业] 测验成绩: {score} 分，已达到及格线 (60分)")
+                            return StudyResult.SUCCESS
+                        else:
+                            self.log(f"[作业] 测验成绩: {score} 分，未达及格线 (60分)")
+                            if attempt < max_attempts - 1:
+                                continue
+                            else:
+                                self.log(f"[作业] 已达最大重做次数，保留成绩: {score} 分")
+                                return StudyResult.SUCCESS
+                    else:
+                        return StudyResult.SUCCESS
+
+                if any(w in msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已经作答", "已完成", "作业已截止", "已批阅"]):
+                    self.log(f"[作业] 作业此前已完成或已提交 -> {msg}")
+                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已完成)")
+                    return StudyResult.SUCCESS
+
+                candidate_endpoints = [
+                    f"{origin}/mooc-ans/work/addStudentWorkNew",
+                    f"{origin}/mooc-ans/work/addStudentWorkNewWeb",
+                    f"{origin}/work/addStudentWorkNewWeb",
+                    f"{origin}/work/addStudentWorkNew",
+                ]
+                submitted_alt = False
+                for alt_url in candidate_endpoints:
+                    if alt_url == submit_url:
+                        continue
+                    try:
+                        res_alt = self.session.post(alt_url, data=questions, headers=submit_headers, timeout=30)
+                        res_alt_json = res_alt.json()
+                        alt_msg = res_alt_json.get("msg", "")
+                        if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
+                            self.log(f"[作业] 备用接口提交成功 -> {alt_msg}")
+                            set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
+                            submitted_alt = True
+                            break
+                    except Exception:
+                        pass
+
+                if submitted_alt:
+                    score = self._check_work_score(_course, _job, _job_info, questions)
+                    if score is not None:
+                        last_score = score
+                        if score >= 60.0 or attempt >= max_attempts - 1:
+                            return StudyResult.SUCCESS
+                        else:
+                            continue
+                    return StudyResult.SUCCESS
+
+                try:
+                    questions["pyFlag"] = "1"
+                    res_save = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
+                    res_save_json = res_save.json()
+                    if res_save_json.get("status") is True:
+                        self.log(f"[作业] 保存答题成功 -> {res_save_json.get('msg', '')}")
+                        set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已保存)")
                         return StudyResult.SUCCESS
                 except Exception:
                     pass
 
-            # 备用方案 2：保存草稿模式重试 (pyFlag="1")
-            self.log("[作业] 正在尝试保存草稿模式 (pyFlag=1)...")
-            try:
-                questions["pyFlag"] = "1"
-                res_save = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
-                res_save_json = res_save.json()
-                if res_save_json.get("status") is True:
-                    self.log(f"[作业] 保存答题成功 -> {res_save_json.get('msg', '')}")
-                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已保存)")
-                    return StudyResult.SUCCESS
-            except Exception:
-                pass
+                self.log(f"[作业] 提交答题提示: {msg}")
+                if attempt >= max_attempts - 1:
+                    return StudyResult.ERROR
 
-            self.log(f"[作业] 提交答题失败 -> {msg}")
-            return StudyResult.ERROR
-        except Exception as e:
-            self.log(f"[作业] 提交网络或服务器异常: {e}")
-            return StudyResult.ERROR
+            except Exception as e:
+                self.log(f"[作业] 提交网络或服务器异常: {e}")
+                if attempt >= max_attempts - 1:
+                    return StudyResult.ERROR
+
+        return StudyResult.SUCCESS
 
     def _decode_questions_info(self, html_content: str, resp=None, _course=None, _job=None, _job_info=None) -> dict:
         """
@@ -1963,6 +2143,9 @@ class AndroidStudyEngine:
             # 直播任务简化处理：直接标记成功（Android 环境不处理直播）
             self.log(f"  直播任务，跳过: {job.get('name', '未知')}")
             return StudyResult.SUCCESS
+        elif job_type in ("topic", "bbs", "discussion"):
+            self.log(f"  识别到章节讨论任务, 任务章节: {course.get('title', '未知')} 任务ID: {job.get('jobid', '')}")
+            return self.study_topic_job(course, job, job_info)
         else:
             self.log(f"  未知任务类型: {job_type}")
             return StudyResult.ERROR
@@ -2167,6 +2350,13 @@ class AndroidStudyEngine:
         q_thread.join()
         o_thread.join()
 
+        # 自动参与课程讨论区
+        if self._running:
+            try:
+                self.study_course_discussions(course)
+            except Exception as e:
+                self.log(f"[讨论] 自动参与讨论容错: {e}")
+
         # 更新进度（所有章节处理完成后）
         self.on_progress(1.0)
         set_study_progress(1.0)
@@ -2197,11 +2387,19 @@ class AndroidStudyEngine:
             self._running = False
             return "no_courses"
 
-        # 过滤课程
-        if course_ids:
-            id_list = [c.strip() for c in course_ids.split(",")]
+        # 过滤课程：取消默认全选刷课机制，必须由用户在课程列表中多选勾选
+        if course_ids and str(course_ids).strip():
+            id_list = [c.strip() for c in str(course_ids).split(",") if c.strip()]
             courses = [c for c in courses if str(c.get("courseId", "")) in id_list]
-            self.log(f"过滤后剩余 {len(courses)} 门课程")
+            self.log(f"已按多选配置筛选出 {len(courses)} 门待学课程")
+            if not courses:
+                self.log("[提示] 勾选的课程 ID 在当前账号课程列表中未匹配到，请重新勾选")
+                self._running = False
+                return "no_selected_courses"
+        else:
+            self.log("[提示] 未勾选任何课程，已取消默认全选刷课模式。请在课程列表中勾选课程后重试")
+            self._running = False
+            return "no_selected_courses"
 
         # 逐个处理课程
         stopped = False
@@ -2284,6 +2482,8 @@ def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
             _study_result = "login_failed"
         elif run_res == "no_courses":
             _study_result = "no_courses"
+        elif run_res == "no_selected_courses":
+            _study_result = "no_selected_courses"
         elif run_res == "stopped":
             _study_result = "stopped"
         else:

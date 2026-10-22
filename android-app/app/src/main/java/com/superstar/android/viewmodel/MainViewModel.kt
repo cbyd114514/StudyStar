@@ -36,6 +36,8 @@ private val PASSWORD_KEY = stringPreferencesKey("saved_password")
 private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config")
 private val LANGUAGE_KEY = stringPreferencesKey("app_language")
 private val AUTO_LOGIN_KEY = booleanPreferencesKey("auto_login")
+private fun getUserLlmKey(username: String) = stringPreferencesKey("llm_config_${username.trim()}")
+private fun getUserCourseIdsKey(username: String) = stringPreferencesKey("course_ids_${username.trim()}")
 
 /**
  * 应用主 ViewModel
@@ -49,6 +51,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 刷课状态
     private val _studyState = MutableStateFlow(StudyState())
     val studyState: StateFlow<StudyState> = _studyState.asStateFlow()
+
+    // 出现的问题与重点提醒列表（轻量维护最近问题，杜绝日志泛滥与渲染卡顿）
+    private val _recentIssues = MutableStateFlow<List<LogEntry>>(emptyList())
+    val recentIssues: StateFlow<List<LogEntry>> = _recentIssues.asStateFlow()
+
+    fun clearIssues() {
+        _recentIssues.value = emptyList()
+        _logs.value = emptyList()
+        _deduplicatedLogs.value = emptyList()
+    }
 
     // 原始日志（全部保留，用于 UI 直接显示）
     private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
@@ -124,8 +136,86 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 savedUsername = _loginState.value.savedUsername,
                 savedPassword = _loginState.value.savedPassword
             )
+            // 登出时重置内存中的 API Key 与课程选择，不与下一个登录账号共享
+            _studyState.value = _studyState.value.copy(
+                llmConfig = null,
+                courseIds = null
+            )
             _currentPage.value = Page.LOGIN
             addLog("已退出登录", LogType.INFO)
+        }
+    }
+
+    /**
+     * 账号独占配置加载（API Key 与已选课程与当前登录账号绑定，切换账号时隔离）
+     */
+    fun loadUserConfig(username: String) {
+        if (username.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                val data = context.configDataStore.data.first()
+                val userLlmConfig = data[getUserLlmKey(username)] ?: ""
+                val userCourseIds = data[getUserCourseIdsKey(username)] ?: ""
+                _studyState.value = _studyState.value.copy(
+                    llmConfig = userLlmConfig.ifBlank { null },
+                    courseIds = userCourseIds.ifBlank { null }
+                )
+                if (userLlmConfig.isNotBlank()) {
+                    addLog("已恢复此账号关联的 API Key 大模型配置", LogType.INFO)
+                }
+                if (userCourseIds.isNotBlank()) {
+                    addLog("已恢复此账号历史勾选的课程", LogType.INFO)
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 保存大模型配置到当前登录账号（实现 API Key 随账号绑定保存）
+     */
+    fun saveUserLlmConfig(llmConfig: String) {
+        val username = _loginState.value.username ?: _loginState.value.savedUsername ?: ""
+        _studyState.value = _studyState.value.copy(llmConfig = llmConfig.ifBlank { null })
+        if (username.isBlank()) return
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    if (llmConfig.isNotBlank()) {
+                        prefs[getUserLlmKey(username)] = llmConfig
+                    } else {
+                        prefs.remove(getUserLlmKey(username))
+                    }
+                }
+                addLog("API Key 与大模型配置已保存至当前账号", LogType.SUCCESS)
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 更新课程多选参数并自动保存到当前登录账号
+     */
+    fun updateCourseSelection(courseIds: String) {
+        val username = _loginState.value.username ?: _loginState.value.savedUsername ?: ""
+        _studyState.value = _studyState.value.copy(courseIds = courseIds.ifBlank { null })
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    if (courseIds.isNotBlank()) {
+                        prefs[COURSE_IDS_KEY] = courseIds
+                        if (username.isNotBlank()) {
+                            prefs[getUserCourseIdsKey(username)] = courseIds
+                        }
+                    } else {
+                        prefs.remove(COURSE_IDS_KEY)
+                        if (username.isNotBlank()) {
+                            prefs.remove(getUserCourseIdsKey(username))
+                        }
+                    }
+                }
+            } catch (_: Exception) {}
         }
     }
 
@@ -167,7 +257,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val savedUsername = data[USERNAME_KEY]
                 val savedPasswordRaw = data[PASSWORD_KEY]
                 val savedPassword = CryptoSecurityHelper.decrypt(savedPasswordRaw)
-                val savedLlmConfig = data[LLM_CONFIG_KEY]
                 val savedLanguage = data[LANGUAGE_KEY] ?: "zh"
                 val savedAutoLogin = data[AUTO_LOGIN_KEY] ?: false
                 _currentLanguage.value = savedLanguage
@@ -180,11 +269,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     saveCredentials(savedUsername, savedPassword)
                 }
 
+                // 账号独占隔离：如果存在保存的账号，优先加载该账号绑定的专属 API Key 与多选课程配置
+                val userLlmConfig = if (!savedUsername.isNullOrBlank()) {
+                    data[getUserLlmKey(savedUsername)] ?: data[LLM_CONFIG_KEY]
+                } else null
+                val userCourseIds = if (!savedUsername.isNullOrBlank()) {
+                    data[getUserCourseIdsKey(savedUsername)] ?: savedCourseIds
+                } else null
+
                 _studyState.value = _studyState.value.copy(
                     speed = savedSpeed,
                     jobs = savedJobs,
-                    courseIds = savedCourseIds,
-                    llmConfig = savedLlmConfig
+                    courseIds = userCourseIds,
+                    llmConfig = userLlmConfig
                 )
 
                 // 如果有保存的账号密码，自动填充到登录状态
@@ -194,12 +291,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         savedPassword = savedPassword
                     )
                     addLog("已加载保存的账号: $savedUsername", LogType.INFO)
+                    if (!userLlmConfig.isNullOrBlank()) {
+                        addLog("已恢复此账号关联的 API Key 大模型配置", LogType.INFO)
+                    }
+                    if (!userCourseIds.isNullOrBlank()) {
+                        addLog("已恢复此账号历史勾选的课程", LogType.INFO)
+                    }
                 }
 
                 addLog("已加载保存的配置: 速度=${savedSpeed}x, 并发=${savedJobs}", LogType.INFO)
-                if (!savedLlmConfig.isNullOrBlank()) {
-                    addLog("已加载大模型配置", LogType.INFO)
-                }
             } catch (t: Throwable) {
                 addLog("加载配置失败: ${t.message}", LogType.WARNING)
             }
@@ -289,6 +389,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                                 password = password,
                                 error = null // 关键：彻底清除任何残留错误，杜绝出现 failure
                             )
+                            loadUserConfig(username) // 关键：恢复此账号专属的 API Key 与选课状态
                             addLog("登录成功", LogType.SUCCESS)
                             _currentPage.value = Page.MAIN
                         } else {
@@ -330,6 +431,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
 
             val actualCourseIds = courseIds ?: _studyState.value.courseIds
+            if (actualCourseIds.isNullOrBlank()) {
+                val warnMsg = "请在课程列表中勾选需要学习的课程（至少勾选一门）"
+                addLog(warnMsg, LogType.WARNING)
+                NotificationHelper.notifyError(
+                    getApplication(),
+                    "学习星 选课提示",
+                    warnMsg
+                )
+                return@launch
+            }
             val actualSpeed = speed.takeIf { it > 0 } ?: _studyState.value.speed
             val actualJobs = jobs.takeIf { it > 0 } ?: _studyState.value.jobs
             val actualLlmConfig = llmConfig ?: _studyState.value.llmConfig
@@ -530,11 +641,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 添加日志
+     * 添加日志与状态追踪
      * - 敏感凭证与 API Key 实时自动脱敏过滤
-     * - 保留最近 500 条日志，兼顾长期记录与轻量内存开销
-     * - 高性能 O(1) 增量更新去重日志列表，杜绝全量扫描导致的 GC 停顿与卡顿
-     * - 遇到关键报错时自动触发系统通知
+     * - 轻量内存缓冲（上限 25 条），杜绝频繁日志复制引发的 GC 卡顿（尤其在小米/红米等机型）
+     * - 维护最近问题与提醒列表（转译为通俗易懂的中文，剔除技术错误码）
+     * - 遇到关键报错时自动触发人文化系统通知
      */
     private fun addLog(message: String, type: LogType? = null) {
         val safeMsg = CryptoSecurityHelper.sanitizeLog(message)
@@ -542,20 +653,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val time = timeFormat.format(Date())
         val newEntry = LogEntry(id = nextLogId++, message = safeMsg, type = actualType, timestamp = time)
 
-        // 报错时触发系统通知提醒用户（节流保护：至少间隔 8 秒）
+        // 维护最近问题与提醒列表（给用户清晰提示，无底层技术错误码）
+        if (actualType == LogType.ERROR || actualType == LogType.WARNING) {
+            val humanizedMsg = NotificationHelper.humanize(safeMsg)
+            val issueEntry = newEntry.copy(message = humanizedMsg)
+            val currentIssues = _recentIssues.value.toMutableList()
+            if (currentIssues.none { it.message == humanizedMsg }) {
+                currentIssues.add(issueEntry)
+                if (currentIssues.size > 10) {
+                    currentIssues.removeAt(0)
+                }
+                _recentIssues.value = currentIssues
+            }
+        }
+
+        // 报错时触发系统通知提醒用户（节流保护：至少间隔 8 秒，经 humanize 转译）
         if (actualType == LogType.ERROR && _studyState.value.isRunning) {
             val now = System.currentTimeMillis()
             if (now - lastErrorNotifyTime > 8000L) {
                 lastErrorNotifyTime = now
                 NotificationHelper.notifyError(
                     getApplication(),
-                    "学习星 任务报错提醒",
+                    "学习星 任务提醒",
                     safeMsg
                 )
             }
         }
 
-        // 1. 增量去重更新（极速 O(1)，无循环遍历，极大减轻主线程开销与掉帧）
+        // 1. 增量去重更新（轻量上限 25 条，极大减轻主线程数组复制与 MIUI/HyperOS GC 掉帧）
         val currentDedup = _deduplicatedLogs.value.toMutableList()
         if (currentDedup.isEmpty()) {
             currentDedup.add(newEntry)
@@ -570,15 +695,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 currentDedup.add(newEntry)
             }
         }
-        if (currentDedup.size > 500) {
+        if (currentDedup.size > 25) {
             currentDedup.removeAt(0)
         }
         _deduplicatedLogs.value = currentDedup
 
-        // 2. 原始日志记录（上限 500 条，保护内存占用）
+        // 2. 原始日志记录（轻量上限 25 条，杜绝长期运行内存泄漏与渲染卡顿）
         val currentLogs = _logs.value.toMutableList()
         currentLogs.add(newEntry)
-        if (currentLogs.size > 500) {
+        if (currentLogs.size > 25) {
             currentLogs.removeAt(0)
         }
         _logs.value = currentLogs
