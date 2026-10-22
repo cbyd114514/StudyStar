@@ -3,21 +3,33 @@
   <h2 align="center" style="font-weight: 600">学习星 (StudyStar) Android</h2>
 
   <p align="center">
-    超星学习通全功能辅助客户端 · 现代 Material Design 3 极清高刷 Android 原生重塑版
+    超星学习通全功能辅助客户端 · 现代 Google Material Design 3 极清高刷 Android 原生重塑版
   </p>
 </p>
 
-基于开源项目 [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) 核心，采用 Google 最新 **Jetpack Compose** 与 **Material Design 3 (Material You)** 标准全面重塑的 Android 客户端。
+基于开源项目 [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) 核心，严格遵循 Google 最新 **Material Design 3 (Material You)** 规范、现代 Android 原生架构与安全标准重塑的 Android 客户端。
 
 ---
 
 ## 特性一览
 
-- **原生 Android 规范与沉浸全面屏**
-  - 采用 Google Jetpack Compose 全响应式重绘，取消繁琐底部导航栏，右上角直通常用设置与内置日志控制台；
-  - 适配异形挖孔全面屏短边延展（`shortEdges` Display Cutout）与沉浸式 Edge-to-Edge 视觉视界。
+- **Google Material Design 3 (Material You) 规范全景重塑**
+  - **色彩系统与动态取色**：原生对接 Android 12+ (API 31+) 动态取色引擎（Dynamic Color），根据设备壁纸与系统主题自动调和调色板；内置 Oceanic Blue 品牌色调系统，完整覆盖 Primary、Secondary、Tertiary、Surface Container（Lowest/Low/Normal/High/Highest）、Outline 及 Error 全套语义角色；
+  - **色调标高体系 (Tonal Elevation)**：遵循 M3 规范，使用纯粹的 Surface 色阶与色调投射取代传统刺眼的阴影落差，呈现通透自然的视觉层级；
+  - **完整 15 阶 Typography 字体规范**：构建涵盖 Display、Headline、Title、Body、Label 的 15 级专业字体阶梯；
+  - **统一 Shapes 几何圆角比例系统**：采用 4dp (extraSmall) 至 28dp (extraLarge) 的 M3 标准比例，确保界面各元素协调统一；
+  - **规范化组件与交互**：Pinned TopAppBar 协同嵌套滚动（NestedScroll）平滑变色、Filled / Filled Tonal / Outlined 按钮层级、M3 FilterChip 滤镜胶囊与全控件 48dp 最小交互触控靶区。
+- **全方位安全保障与硬件级凭据加密**
+  - **Android KeyStore 硬件底层 AES-256-GCM 凭据加密**：用户密码等敏感数据采用硬件级 Android KeyStore 安全密钥派生，基于高强度 AES-256-GCM 算法加密隔离存储，杜绝本地明文泄密风险；
+  - **日志敏感信息实时脱敏过滤 (Log Sanitization)**：内存与控制台日志全局实时正则拦截过滤，用户密码自动遮盖为掩码，API Key 自动脱敏为安全格式，Bearer Token 实时屏蔽；
+  - **防 ADB 物理备份外泄**：禁用系统级备份与 ADB 物理转储，保障离线物理环境下的数据安全；
+  - **API Key 视觉防旁窥保护**：AI 配置面板中的 API 密钥输入框支持显隐切换与密码级遮罩，防止公众场合旁窥。
+- **高刷新率显示与 Compose 极速渲染管线**
+  - **列表项独占键与类型复用 (Key & ContentType)**：LazyColumn 容器所有子项均绑定稳定唯一的 `key` 与精确明确的 `contentType`，完全解锁 Compose 运行时项复用（Item Recycling）与内存高效回收；
+  - **高频重组深度隔离**：将分秒级动态跳动的视频播放进度与答题步骤拆分为独立叶子 Composable，彻底隔离重组范围，杜绝由于进度跳动引起的控制台整体重复重绘；
+  - **原生高刷物理通道对齐**：原生对接 Android 高刷新率显示管线（支持 60Hz / 90Hz / 120Hz / 144Hz 等高刷屏幕），强制启用窗口硬件加速，彻底消除长列表滑动掉帧。
 - **双流水线并发执行（刷视频与答题同时进行）**
-  - 架构全面重塑为双流水线异步并发引擎，视频播放与章节测验、作业答题互不阻塞、同步推进，大幅压缩整体刷课用时。
+  - 架构重塑为双流水线异步并发引擎，视频播放与章节测验、作业答题互不阻塞、同步推进，大幅压缩整体刷课用时。
 - **细粒度实时进度指示**
   - **视频播放进度**：精确呈现分钟与秒数进度（例如：`03分45秒 / 15分20秒`），进度实时动态刷新；
   - **测验答题进度**：实时呈现当前正在解答的具体题号（例如：`第 3/10 题`），答题状态实时可知。
@@ -31,11 +43,7 @@
 - **全应用无缝双语切换 (Bilingual Support)**
   - 深度支持 **简体中文 (Simplified Chinese)** 与 **English** 全局无缝切换；
   - 控制台、登录页、设置面板、卡片与提示文案全场景对应动态翻译，随时在设置中一键自由切换。
-- **高刷新率显示与列表虚拟化优化**
-  - 彻底优化课程选择与配置面板的渲染管线，采用 Compose 顶层虚拟化惰性加载（Lazy Virtualization），消除长列表滑动卡顿与掉帧；
-  - 原生对接 Android 高帧率物理显示通道（60Hz / 90Hz / 120Hz / 144Hz 等高刷屏幕满帧流畅），开启全局硬件加速。
 - **AI 大模型智能答题与独立视觉连通性检测**
-  - **秒开优化**：隔离渲染测量树，展开 AI 答题配置卡片顺滑流畅无卡顿；
   - **独立视觉连通性检测**：测试大模型连通性不再输出到运行日志中，直接在 AI 板块视觉高亮反馈——**连通成功自动变绿**，**连通失败自动变红**并提示原因；
   - 支持一键直达 DeepSeek 官网与硅基流动（SiliconFlow）平台获取 API Key；
   - 全自动识别随堂视频测试题、章节测验与课后作业，自动解析并提交高分答案。
@@ -66,14 +74,15 @@ SuperStar_R_Android/
 │   ├── app/
 │   │   ├── src/main/
 │   │   │   ├── java/com/superstar/android/
-│   │   │   │   ├── MainActivity.kt      # 主入口，Edge-to-Edge 与开屏动画
+│   │   │   │   ├── MainActivity.kt      # 主入口，Edge-to-Edge、高刷调度与开屏动画
+│   │   │   │   ├── security/            # CryptoSecurityHelper 硬件密钥加密与日志脱敏
 │   │   │   │   ├── notification/        # NotificationHelper 系统级报错通知
 │   │   │   │   ├── license/             # 远程/本地许可证管理（平滑放行）
 │   │   │   │   ├── python/              # PythonBridge 桥接适配器
-│   │   │   │   ├── viewmodel/           # MainViewModel 业务、持久化与自动登录控制
+│   │   │   │   ├── viewmodel/           # MainViewModel 业务、加密持久化与自动登录控制
 │   │   │   │   └── ui/
 │   │   │   │       ├── i18n/            # AppStrings 全局双语国际化字典
-│   │   │   │       ├── theme/           # Material Design 3 Ocean Blue 主题规范
+│   │   │   │       ├── theme/           # Material Design 3 主题系统 (Color, Type, Shape)
 │   │   │   │       └── screens/         # Dashboard / Login / Settings 界面
 │   │   │   ├── python/                  # Python 刷课内核适配脚本（双流水线并发引擎）
 │   │   │   └── res/                     # 全密度自适应图标、字体与资源
@@ -95,7 +104,7 @@ SuperStar_R_Android/
 - **构建环境**：
   - JDK 17 (推荐 OpenJDK 17)
   - Android SDK 34 / 35
-  - Python 3.12 (与 Chaquopy 完美匹配)
+  - Python 3.12 (与 Chaquopy 匹配)
 
 ---
 

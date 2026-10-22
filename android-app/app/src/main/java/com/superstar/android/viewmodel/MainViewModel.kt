@@ -12,6 +12,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.superstar.android.notification.NotificationHelper
 import com.superstar.android.python.PythonBridge
+import com.superstar.android.security.CryptoSecurityHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -164,12 +165,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val savedJobs = data[JOBS_KEY] ?: 4
                 val savedCourseIds = data[COURSE_IDS_KEY]
                 val savedUsername = data[USERNAME_KEY]
-                val savedPassword = data[PASSWORD_KEY]
+                val savedPasswordRaw = data[PASSWORD_KEY]
+                val savedPassword = CryptoSecurityHelper.decrypt(savedPasswordRaw)
                 val savedLlmConfig = data[LLM_CONFIG_KEY]
                 val savedLanguage = data[LANGUAGE_KEY] ?: "zh"
                 val savedAutoLogin = data[AUTO_LOGIN_KEY] ?: false
                 _currentLanguage.value = savedLanguage
                 _autoLogin.value = savedAutoLogin
+
+                // 历史明文凭证无缝迁移为硬件级 AES-GCM 加密存储
+                if (!savedUsername.isNullOrBlank() && !savedPassword.isNullOrBlank() &&
+                    savedPasswordRaw != null && !savedPasswordRaw.startsWith("ENC_GCM:")
+                ) {
+                    saveCredentials(savedUsername, savedPassword)
+                }
 
                 _studyState.value = _studyState.value.copy(
                     speed = savedSpeed,
@@ -236,15 +245,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 保存账号密码到本地（登录状态保持）
+     * 保存账号密码到本地（硬件级 AES-256-GCM 加密存储，保障凭证安全）
      */
     private fun saveCredentials(username: String, password: String) {
         viewModelScope.launch {
             try {
                 val context = getApplication<Application>()
+                val encryptedPassword = CryptoSecurityHelper.encrypt(password)
                 context.configDataStore.edit { prefs ->
                     prefs[USERNAME_KEY] = username
-                    prefs[PASSWORD_KEY] = password
+                    prefs[PASSWORD_KEY] = encryptedPassword
                 }
             } catch (e: Exception) {
                 // 静默处理，不影响用户体验
@@ -521,14 +531,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     /**
      * 添加日志
-     * - 保留最近 1000 条原始日志
+     * - 敏感凭证与 API Key 实时自动脱敏过滤
+     * - 保留最近 500 条日志，兼顾长期记录与轻量内存开销
      * - 高性能 O(1) 增量更新去重日志列表，杜绝全量扫描导致的 GC 停顿与卡顿
      * - 遇到关键报错时自动触发系统通知
      */
     private fun addLog(message: String, type: LogType? = null) {
-        val actualType = type ?: parseLogType(message)
+        val safeMsg = CryptoSecurityHelper.sanitizeLog(message)
+        val actualType = type ?: parseLogType(safeMsg)
         val time = timeFormat.format(Date())
-        val newEntry = LogEntry(id = nextLogId++, message = message, type = actualType, timestamp = time)
+        val newEntry = LogEntry(id = nextLogId++, message = safeMsg, type = actualType, timestamp = time)
 
         // 报错时触发系统通知提醒用户（节流保护：至少间隔 8 秒）
         if (actualType == LogType.ERROR && _studyState.value.isRunning) {
@@ -538,7 +550,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 NotificationHelper.notifyError(
                     getApplication(),
                     "学习星 任务报错提醒",
-                    message
+                    safeMsg
                 )
             }
         }
@@ -550,7 +562,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             val last = currentDedup.last()
             val rawMsg = last.message.replace(Regex(""" \(×\d+\)$"""), "")
-            if (rawMsg == message && last.type == actualType) {
+            if (rawMsg == safeMsg && last.type == actualType) {
                 val currentCount = Regex("""\(×(\d+)\)$""").find(last.message)?.groupValues?.get(1)?.toIntOrNull() ?: 1
                 val newCount = currentCount + 1
                 currentDedup[currentDedup.size - 1] = last.copy(message = "$rawMsg (×$newCount)")
@@ -558,15 +570,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 currentDedup.add(newEntry)
             }
         }
-        if (currentDedup.size > 1000) {
+        if (currentDedup.size > 500) {
             currentDedup.removeAt(0)
         }
         _deduplicatedLogs.value = currentDedup
 
-        // 2. 原始日志记录
+        // 2. 原始日志记录（上限 500 条，保护内存占用）
         val currentLogs = _logs.value.toMutableList()
         currentLogs.add(newEntry)
-        if (currentLogs.size > 1000) {
+        if (currentLogs.size > 500) {
             currentLogs.removeAt(0)
         }
         _logs.value = currentLogs

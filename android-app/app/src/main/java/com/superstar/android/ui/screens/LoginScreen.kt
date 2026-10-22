@@ -21,7 +21,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -77,6 +76,10 @@ import com.superstar.android.ui.i18n.AppStrings
 import com.superstar.android.viewmodel.MainViewModel
 import kotlin.math.hypot
 
+/**
+ * 学习星 (StudyStar) 登录界面
+ * 遵循 Material Design 3 规范、48dp 交互触控靶区与全屏涟漪揭示动画
+ */
 @Composable
 fun LoginScreen(
     viewModel: MainViewModel,
@@ -151,17 +154,18 @@ fun LoginScreen(
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // 头像 / Logo
+                // Logo 徽标
                 Surface(
                     modifier = Modifier.size(92.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shadowElevation = 6.dp,
+                    tonalElevation = 6.dp,
+                    shadowElevation = 4.dp,
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                 ) {
                     Image(
                         painter = painterResource(id = R.drawable.app_logo),
-                        contentDescription = "学习星 Logo",
+                        contentDescription = "Logo",
                         modifier = Modifier
                             .fillMaxSize()
                             .clip(CircleShape)
@@ -185,13 +189,13 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // 专属提示卡片：明确告知用户账号密码归属
+                // 账号归属提示卡片
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                     ),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Row(
                         modifier = Modifier
@@ -220,11 +224,11 @@ fun LoginScreen(
                 // 登录表单卡片
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(24.dp),
+                    shape = MaterialTheme.shapes.extraLarge,
                     colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
                         modifier = Modifier
@@ -263,7 +267,7 @@ fun LoginScreen(
                                 keyboardType = KeyboardType.Text,
                                 imeAction = ImeAction.Next
                             ),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -308,7 +312,7 @@ fun LoginScreen(
                                     }
                                 }
                             ),
-                            shape = RoundedCornerShape(14.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
 
                         // 错误信息提示
@@ -319,7 +323,7 @@ fun LoginScreen(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.errorContainer
                                 ),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MaterialTheme.shapes.small
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -343,7 +347,7 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        // 登录按钮（记录其屏幕中心坐标，用于全屏展开动画）
+                        // 登录按钮（记录其中心坐标，驱动圆形揭示全屏过渡动画）
                         Button(
                             onClick = { viewModel.login(username, password) },
                             modifier = Modifier
@@ -354,7 +358,7 @@ fun LoginScreen(
                                     buttonCenter = bounds.center
                                 },
                             enabled = !loginState.isLoading && username.isNotBlank() && password.isNotBlank(),
-                            shape = RoundedCornerShape(14.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -377,13 +381,13 @@ fun LoginScreen(
                             }
                         }
 
-                        // 自动登录勾选框（紧贴在登录按钮下方，默认不勾选）
+                        // 自动登录勾选框（紧贴在登录按钮下方，保证 48dp 交互靶区）
                         Spacer(modifier = Modifier.height(10.dp))
                         Row(
                             modifier = Modifier
-                                .clip(RoundedCornerShape(8.dp))
+                                .clip(MaterialTheme.shapes.small)
                                 .clickable { viewModel.setAutoLogin(!autoLogin) }
-                                .padding(horizontal = 4.dp, vertical = 4.dp),
+                                .padding(horizontal = 8.dp, vertical = 8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Checkbox(

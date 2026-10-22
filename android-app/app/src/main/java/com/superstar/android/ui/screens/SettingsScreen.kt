@@ -1,10 +1,7 @@
 package com.superstar.android.ui.screens
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import com.superstar.android.ui.i18n.AppStrings
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,12 +18,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
-import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -35,10 +30,10 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -60,7 +55,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalUriHandler
@@ -69,11 +64,16 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.superstar.android.ui.i18n.AppStrings
 import com.superstar.android.ui.theme.StatusInfo
 import com.superstar.android.ui.theme.StatusSuccess
 import com.superstar.android.ui.theme.StatusWarning
 import com.superstar.android.viewmodel.MainViewModel
 
+/**
+ * 学习星 (StudyStar) 设置与工具界面
+ * 遵循 Material Design 3 规范、日志安全脱敏与 120Hz/144Hz 高性能渲染
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
@@ -88,6 +88,7 @@ fun SettingsScreen(
     val currentLang by viewModel.currentLanguage.collectAsState()
 
     val isZh = currentLang == "zh"
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
 
@@ -98,6 +99,7 @@ fun SettingsScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = {
@@ -115,8 +117,10 @@ fun SettingsScreen(
                         )
                     }
                 },
+                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -130,13 +134,14 @@ fun SettingsScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 1. 项目开源主页 (GitHub)
-            item {
+            item(key = "github_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -167,14 +172,10 @@ fun SettingsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Spacer(modifier = Modifier.height(12.dp))
-                        Button(
+                        FilledTonalButton(
                             onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Icon(
                                 imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -192,10 +193,10 @@ fun SettingsScreen(
             }
 
             // 2. 界面语言切换
-            item {
+            item(key = "language_card", contentType = "card") {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.outlinedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -246,13 +247,14 @@ fun SettingsScreen(
             }
 
             // 3. 运行日志集成控制台
-            item {
+            item(key = "logs_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
@@ -299,7 +301,7 @@ fun SettingsScreen(
                                     Toast.makeText(context, if (isZh) "已复制全部日志" else "Logs copied", Toast.LENGTH_SHORT).show()
                                 },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MaterialTheme.shapes.small
                             ) {
                                 Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -309,7 +311,7 @@ fun SettingsScreen(
                             OutlinedButton(
                                 onClick = { viewModel.clearLogs() },
                                 modifier = Modifier.weight(1f),
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MaterialTheme.shapes.small
                             ) {
                                 Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -320,7 +322,7 @@ fun SettingsScreen(
                                 selected = autoScrollEnabled,
                                 onClick = { autoScrollEnabled = !autoScrollEnabled },
                                 label = { Text(if (autoScrollEnabled) (if (isZh) "跟进" else "Follow") else (if (isZh) "暂停" else "Pause"), fontSize = 12.sp) },
-                                shape = RoundedCornerShape(10.dp)
+                                shape = MaterialTheme.shapes.small
                             )
                         }
 
@@ -331,7 +333,7 @@ fun SettingsScreen(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(280.dp),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
                             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                         ) {
@@ -354,7 +356,11 @@ fun SettingsScreen(
                                         .padding(horizontal = 10.dp, vertical = 8.dp),
                                     verticalArrangement = Arrangement.spacedBy(6.dp)
                                 ) {
-                                    items(logs, key = { it.id }) { log ->
+                                    items(
+                                        items = logs,
+                                        key = { it.id },
+                                        contentType = { "log_item" }
+                                    ) { log ->
                                         LogItemView(log = log)
                                     }
                                 }
@@ -365,10 +371,10 @@ fun SettingsScreen(
             }
 
             // 4. 当前账号与退出登录
-            item {
+            item(key = "account_card", contentType = "card") {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(18.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.outlinedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -402,7 +408,7 @@ fun SettingsScreen(
                                 onBack()
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.errorContainer,
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer
@@ -423,7 +429,7 @@ fun SettingsScreen(
                 }
             }
 
-            item {
+            item(key = "bottom_spacer", contentType = "spacer") {
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
@@ -444,7 +450,7 @@ private fun LogItemView(log: MainViewModel.LogEntry) {
         verticalAlignment = Alignment.Top
     ) {
         Surface(
-            shape = RoundedCornerShape(4.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             color = typeColor.copy(alpha = 0.15f)
         ) {
             Text(

@@ -1,10 +1,10 @@
 package com.superstar.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -23,7 +23,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -44,6 +43,8 @@ import androidx.compose.material.icons.outlined.Quiz
 import androidx.compose.material.icons.outlined.Save
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
+import androidx.compose.material.icons.outlined.Visibility
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -51,6 +52,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -70,6 +72,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -81,8 +84,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.superstar.android.ui.i18n.AppStrings
@@ -90,6 +96,10 @@ import com.superstar.android.ui.theme.StatusSuccess
 import com.superstar.android.viewmodel.CourseInfo
 import com.superstar.android.viewmodel.MainViewModel
 
+/**
+ * 学习星 (StudyStar) 控制台界面
+ * 遵循 Google Material Design 3 规范与 120Hz/144Hz 极清高刷架构。
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -102,7 +112,8 @@ fun DashboardScreen(
     val isLoadingCourses by viewModel.isLoadingCourses.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
     val llmTestState by viewModel.llmTestState.collectAsState()
-    val uriHandler = LocalUriHandler.current
+
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     // 本地配置状态
     var configSpeed by remember { mutableFloatStateOf(studyState.speed.toFloat()) }
@@ -144,6 +155,7 @@ fun DashboardScreen(
     }
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
                 title = {
@@ -169,8 +181,10 @@ fun DashboardScreen(
                         )
                     }
                 },
+                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
                 )
             )
         },
@@ -182,7 +196,7 @@ fun DashboardScreen(
                     text = { Text(AppStrings.stopStudyBtn(currentLang), fontWeight = FontWeight.Bold) },
                     containerColor = MaterialTheme.colorScheme.error,
                     contentColor = MaterialTheme.colorScheme.onError,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 )
             } else {
                 ExtendedFloatingActionButton(
@@ -198,7 +212,7 @@ fun DashboardScreen(
                     text = { Text(AppStrings.startStudyBtn(currentLang), fontWeight = FontWeight.Bold) },
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = RoundedCornerShape(16.dp)
+                    shape = MaterialTheme.shapes.large
                 )
             }
         },
@@ -211,26 +225,26 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // --- 状态与进度卡片 ---
-            item {
+            // --- 状态与任务点执行卡片 ---
+            item(key = "status_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(18.dp)
                     ) {
+                        // 顶部状态指示栏
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // 状态圆点
                             Box(
                                 modifier = Modifier
                                     .size(12.dp)
@@ -261,139 +275,16 @@ fun DashboardScreen(
                             }
                         }
 
+                        // 运行中实时章节与任务点双管线展示
                         if (studyState.isRunning) {
                             Spacer(modifier = Modifier.height(14.dp))
-
-                            // 实时当前课程与章节指示
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.LibraryBooks,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = AppStrings.currentCourseLabel(currentLang),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = studyState.currentCourse.ifBlank { AppStrings.connectingCourse(currentLang) },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Layers,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.secondary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = AppStrings.currentChapterLabel(currentLang),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.secondary,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = studyState.currentChapter.ifBlank { AppStrings.analyzingChapter(currentLang) },
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-
-                                    if (studyState.videoProgress.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.PlayCircleOutline,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = AppStrings.videoProgressLabel(currentLang),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = studyState.videoProgress,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-
-                                    if (studyState.quizProgress.isNotBlank()) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Quiz,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.tertiary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = AppStrings.quizProgressLabel(currentLang),
-                                                style = MaterialTheme.typography.labelMedium,
-                                                color = MaterialTheme.colorScheme.tertiary,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text(
-                                            text = studyState.quizProgress,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    }
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.height(12.dp))
-                            val animatedProgress by animateFloatAsState(
-                                targetValue = studyState.progress,
-                                label = "progress_anim"
-                            )
-                            LinearProgressIndicator(
-                                progress = { animatedProgress },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(8.dp)
-                                    .clip(RoundedCornerShape(4.dp)),
-                                color = MaterialTheme.colorScheme.primary,
-                                trackColor = MaterialTheme.colorScheme.primaryContainer
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = "${(studyState.progress * 100).toInt()}${AppStrings.completedSuffix(currentLang)}",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.align(Alignment.End)
+                            RunningProgressSection(
+                                currentLang = currentLang,
+                                currentCourse = studyState.currentCourse,
+                                currentChapter = studyState.currentChapter,
+                                videoProgress = studyState.videoProgress,
+                                quizProgress = studyState.quizProgress,
+                                progress = studyState.progress
                             )
                         }
                     }
@@ -401,14 +292,14 @@ fun DashboardScreen(
             }
 
             // --- 核心参数配置卡片 ---
-            item {
+            item(key = "config_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surface
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
                 ) {
                     Column(
                         modifier = Modifier
@@ -467,13 +358,13 @@ fun DashboardScreen(
                             placeholder = { Text(AppStrings.customCourseIdPlaceholder(currentLang)) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            shape = RoundedCornerShape(12.dp)
+                            shape = MaterialTheme.shapes.medium
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
                         // 保存配置按钮
-                        Button(
+                        FilledTonalButton(
                             onClick = {
                                 viewModel.updateConfig(
                                     speed = configSpeed.toDouble(),
@@ -483,11 +374,7 @@ fun DashboardScreen(
                                 )
                             },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
+                            shape = MaterialTheme.shapes.medium
                         ) {
                             Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
@@ -498,10 +385,10 @@ fun DashboardScreen(
             }
 
             // --- 课程选择卡片头 ---
-            item {
+            item(key = "course_header", contentType = "card") {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.outlinedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -550,7 +437,7 @@ fun DashboardScreen(
                         OutlinedButton(
                             onClick = { viewModel.fetchCourses() },
                             modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = MaterialTheme.shapes.medium,
                             enabled = !isLoadingCourses
                         ) {
                             if (isLoadingCourses) {
@@ -572,56 +459,13 @@ fun DashboardScreen(
                         if (courses.isNotEmpty()) {
                             Spacer(modifier = Modifier.height(10.dp))
 
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = AppStrings.webVerifyTitle(currentLang),
-                                            style = MaterialTheme.typography.labelMedium,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = AppStrings.webVerifyDesc(currentLang),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-                                        lineHeight = 16.sp
-                                    )
-                                    Spacer(modifier = Modifier.height(8.dp))
-                                    OutlinedButton(
-                                        onClick = { uriHandler.openUri("https://mooc1-1.chaoxing.com/visit/interaction") },
-                                        shape = RoundedCornerShape(8.dp),
-                                        modifier = Modifier.fillMaxWidth()
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(14.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(AppStrings.openWebBtn(currentLang), fontSize = 12.sp)
-                                    }
-                                }
-                            }
+                            CourseWebVerificationBanner(currentLang = currentLang)
 
                             Spacer(modifier = Modifier.height(10.dp))
                             Surface(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clip(RoundedCornerShape(10.dp))
+                                    .clip(MaterialTheme.shapes.medium)
                                     .clickable { showCourseList = !showCourseList },
                                 color = MaterialTheme.colorScheme.surfaceContainerLow
                             ) {
@@ -649,11 +493,12 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 虚拟化高性能课程列表项（彻底解决嵌套 Column 带来的滑动卡顿） ---
+            // --- 虚拟化高性能课程列表项 ---
             if (showCourseList && courses.isNotEmpty()) {
                 items(
                     items = courses,
-                    key = { it.courseId }
+                    key = { it.courseId },
+                    contentType = { "course_item" }
                 ) { course ->
                     val isSelected = remember(configCourseIds, course.courseId) {
                         configCourseIds.contains(course.courseId)
@@ -668,11 +513,11 @@ fun DashboardScreen(
                 }
             }
 
-            // --- AI 大模型答题配置 ---
-            item {
+            // --- AI 大模型答题配置卡片 ---
+            item(key = "ai_config", contentType = "card") {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(20.dp),
+                    shape = MaterialTheme.shapes.large,
                     colors = CardDefaults.outlinedCardColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -685,7 +530,7 @@ fun DashboardScreen(
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RoundedCornerShape(10.dp))
+                                .clip(MaterialTheme.shapes.medium)
                                 .clickable { showLlmSection = !showLlmSection },
                             color = Color.Transparent
                         ) {
@@ -707,77 +552,11 @@ fun DashboardScreen(
                                     color = MaterialTheme.colorScheme.onSurface,
                                     modifier = Modifier.weight(1f)
                                 )
-                                when (llmTestState) {
-                                    is MainViewModel.LlmTestState.Success -> {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = Color(0xFF2E7D32)
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Check,
-                                                    contentDescription = null,
-                                                    tint = Color.White,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = AppStrings.llmConnectedBadge(currentLang),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = Color.White,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    is MainViewModel.LlmTestState.Failure -> {
-                                        Surface(
-                                            shape = CircleShape,
-                                            color = MaterialTheme.colorScheme.error
-                                        ) {
-                                            Row(
-                                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                                verticalAlignment = Alignment.CenterVertically
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Outlined.Close,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onError,
-                                                    modifier = Modifier.size(12.dp)
-                                                )
-                                                Spacer(modifier = Modifier.width(4.dp))
-                                                Text(
-                                                    text = AppStrings.llmFailedBadge(currentLang),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onError,
-                                                    fontWeight = FontWeight.Bold
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                    }
-                                    else -> {
-                                        if (configLlmProvider.isNotBlank()) {
-                                            Surface(
-                                                shape = CircleShape,
-                                                color = StatusSuccess.copy(alpha = 0.15f)
-                                            ) {
-                                                Text(
-                                                    text = AppStrings.aiEnabled(currentLang),
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = StatusSuccess,
-                                                    fontWeight = FontWeight.Bold,
-                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                                )
-                                            }
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                        }
-                                    }
-                                }
+                                LlmStatusBadge(
+                                    llmTestState = llmTestState,
+                                    configLlmProvider = configLlmProvider,
+                                    currentLang = currentLang
+                                )
                                 Icon(
                                     imageVector = if (showLlmSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
                                     contentDescription = null,
@@ -829,8 +608,290 @@ fun DashboardScreen(
                 }
             }
 
-            item {
-                Spacer(modifier = Modifier.height(80.dp))
+            item(key = "bottom_spacer", contentType = "spacer") {
+                Spacer(modifier = Modifier.height(84.dp))
+            }
+        }
+    }
+}
+
+/**
+ * 运行中实时章节与任务点双管线展示
+ * 独立隔离重组范围，在视频秒级跳动时避免整个控制台重组
+ */
+@Composable
+private fun RunningProgressSection(
+    currentLang: String,
+    currentCourse: String,
+    currentChapter: String,
+    videoProgress: String,
+    quizProgress: String,
+    progress: Float
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // 当前课程
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.LibraryBooks,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = AppStrings.currentCourseLabel(currentLang),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = currentCourse.ifBlank { AppStrings.connectingCourse(currentLang) },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 当前章节
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Outlined.Layers,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = AppStrings.currentChapterLabel(currentLang),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.secondary,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = currentChapter.ifBlank { AppStrings.analyzingChapter(currentLang) },
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // 视频任务点进度
+            if (videoProgress.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.PlayCircleOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = AppStrings.videoProgressLabel(currentLang),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = videoProgress,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+
+            // 测验答题进度
+            if (quizProgress.isNotBlank()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Outlined.Quiz,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = AppStrings.quizProgressLabel(currentLang),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = quizProgress,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            }
+        }
+    }
+
+    Spacer(modifier = Modifier.height(12.dp))
+    val animatedProgress by animateFloatAsState(
+        targetValue = progress,
+        label = "progress_anim"
+    )
+    LinearProgressIndicator(
+        progress = { animatedProgress },
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(8.dp)
+            .clip(MaterialTheme.shapes.extraSmall),
+        color = MaterialTheme.colorScheme.primary,
+        trackColor = MaterialTheme.colorScheme.primaryContainer
+    )
+    Spacer(modifier = Modifier.height(4.dp))
+    Text(
+        text = "${(progress * 100).toInt()}${AppStrings.completedSuffix(currentLang)}",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.primary,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+/**
+ * 学习通网页版核对横幅
+ */
+@Composable
+private fun CourseWebVerificationBanner(currentLang: String) {
+    val uriHandler = LocalUriHandler.current
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = AppStrings.webVerifyTitle(currentLang),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = AppStrings.webVerifyDesc(currentLang),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
+                lineHeight = 16.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { uriHandler.openUri("https://mooc1-1.chaoxing.com/visit/interaction") },
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
+                    contentDescription = null,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(AppStrings.openWebBtn(currentLang), fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+/**
+ * LLM 连通状态微标
+ */
+@Composable
+private fun LlmStatusBadge(
+    llmTestState: MainViewModel.LlmTestState,
+    configLlmProvider: String,
+    currentLang: String
+) {
+    when (llmTestState) {
+        is MainViewModel.LlmTestState.Success -> {
+            Surface(
+                shape = CircleShape,
+                color = Color(0xFF2E7D32)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Check,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = AppStrings.llmConnectedBadge(currentLang),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        is MainViewModel.LlmTestState.Failure -> {
+            Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.error
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Close,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onError,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = AppStrings.llmFailedBadge(currentLang),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onError,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+        }
+        else -> {
+            if (configLlmProvider.isNotBlank()) {
+                Surface(
+                    shape = CircleShape,
+                    color = StatusSuccess.copy(alpha = 0.15f)
+                ) {
+                    Text(
+                        text = AppStrings.aiEnabled(currentLang),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = StatusSuccess,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
             }
         }
     }
@@ -865,7 +926,7 @@ private fun MaterialSliderRow(
                 modifier = Modifier.weight(1f)
             )
             Surface(
-                shape = RoundedCornerShape(6.dp),
+                shape = MaterialTheme.shapes.extraSmall,
                 color = MaterialTheme.colorScheme.primaryContainer
             ) {
                 Text(
@@ -903,11 +964,11 @@ private fun CourseItemCard(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(MaterialTheme.shapes.medium)
             .clickable(onClick = onSelect),
         color = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
         else MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = RoundedCornerShape(12.dp),
+        shape = MaterialTheme.shapes.medium,
         tonalElevation = if (isSelected) 3.dp else 1.dp
     ) {
         Row(
@@ -948,7 +1009,7 @@ private fun CourseItemCard(
                 }
             } else {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = MaterialTheme.shapes.extraSmall,
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {
                     Text(
@@ -978,6 +1039,7 @@ private fun AiConfigForm(
     onTestConnection: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
+    var isKeyVisible by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -988,7 +1050,7 @@ private fun AiConfigForm(
         // 1. AI 答题使用说明卡片
         Surface(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.medium,
             color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
         ) {
             Column(modifier = Modifier.padding(14.dp)) {
@@ -1032,7 +1094,7 @@ private fun AiConfigForm(
             OutlinedButton(
                 onClick = { uriHandler.openUri("https://platform.deepseek.com/api_keys") },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp)
+                shape = MaterialTheme.shapes.small
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -1045,7 +1107,7 @@ private fun AiConfigForm(
             OutlinedButton(
                 onClick = { uriHandler.openUri("https://cloud.siliconflow.cn/account/ak") },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(10.dp)
+                shape = MaterialTheme.shapes.small
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
@@ -1086,17 +1148,27 @@ private fun AiConfigForm(
             label = { Text(AppStrings.endpointLabel(currentLang)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = MaterialTheme.shapes.medium
         )
 
+        // API Key 输入（带安全性隐藏切换，保护用户密钥防旁窥）
         OutlinedTextField(
             value = configLlmKey,
             onValueChange = onKeyChange,
             label = { Text(AppStrings.apiKeyLabel(currentLang)) },
             placeholder = { Text("sk-...") },
+            trailingIcon = {
+                IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
+                    Icon(
+                        imageVector = if (isKeyVisible) Icons.Outlined.VisibilityOff else Icons.Outlined.Visibility,
+                        contentDescription = if (isKeyVisible) "隐藏 API Key" else "显示 API Key"
+                    )
+                }
+            },
+            visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = MaterialTheme.shapes.medium
         )
 
         OutlinedTextField(
@@ -1105,7 +1177,7 @@ private fun AiConfigForm(
             label = { Text(AppStrings.modelLabel(currentLang)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = RoundedCornerShape(12.dp)
+            shape = MaterialTheme.shapes.medium
         )
 
         // 连通性测试结果反馈卡片（连通变绿，未连通变红）
@@ -1113,7 +1185,7 @@ private fun AiConfigForm(
             is MainViewModel.LlmTestState.Success -> {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = Color(0xFF2E7D32).copy(alpha = 0.12f),
                     border = BorderStroke(1.5.dp, Color(0xFF2E7D32))
                 ) {
@@ -1147,7 +1219,7 @@ private fun AiConfigForm(
             is MainViewModel.LlmTestState.Failure -> {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
+                    shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f),
                     border = BorderStroke(1.5.dp, MaterialTheme.colorScheme.error)
                 ) {
@@ -1199,7 +1271,7 @@ private fun AiConfigForm(
         Button(
             onClick = onTestConnection,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
+            shape = MaterialTheme.shapes.medium,
             enabled = !isTestingLlm && configLlmProvider.isNotBlank() && configLlmKey.isNotBlank(),
             colors = ButtonDefaults.buttonColors(
                 containerColor = buttonBgColor,
