@@ -242,8 +242,8 @@ def _process_attachment_cards(cards: List[Dict[str, Any]]) -> List[Dict[str, Any
                 job_list.append(read_job)
             continue
 
-        # 一开始就把超星api的屎山处理掉，不要用一个屎山行为掩盖另一个屎山 (指根据otherInfo中是否有courseId决定url拼接方式😂)
-        # 清理otherInfo字段中的无效参数，这里优化了一下(保留了作者原来的注释TAT）
+        # 处理超星api参数规范化，根据otherInfo中是否有courseId决定url拼接方式
+        # 清理otherInfo字段中的无效参数
         if "otherInfo" in card:
             logger.trace("Fixing other info...")
             card["otherInfo"] = card["otherInfo"].split("&")[0]
@@ -434,7 +434,8 @@ def _process_question(div_tag, font_decoder=None) -> Dict[str, Any]:
     """处理单个问题"""
     # 提取问题ID和题目类型
     question_id = div_tag.attrs.get("data", "")
-    q_type_code = div_tag.find("div", class_="TiMu").attrs.get("data", "")
+    timu_div = div_tag.find("div", class_="TiMu")
+    q_type_code = timu_div.attrs.get("data", "") if timu_div else ""
     q_type = _get_question_type(q_type_code)
     
     # 提取题目内容和选项
@@ -443,6 +444,17 @@ def _process_question(div_tag, font_decoder=None) -> Dict[str, Any]:
     
     # 解析题目和选项
     q_title = _extract_title(title_div, font_decoder)
+    if q_type == "unknown" and q_title:
+        if "单选题" in q_title or "单项选择" in q_title:
+            q_type = "single"
+        elif "多选题" in q_title or "多项选择" in q_title:
+            q_type = "multiple"
+        elif "判断题" in q_title:
+            q_type = "judgement"
+        elif "填空题" in q_title:
+            q_type = "completion"
+        elif "简答题" in q_title:
+            q_type = "shortanswer"
     q_options = []
     for li in options_list:
         q_options.append(_extract_choices(li, font_decoder))

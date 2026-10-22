@@ -3,13 +3,15 @@
 # @Edit: Samueli924
 # @Reference: https://github.com/SocialSisterYi/xuexiaoyi-to-xuexitong-tampermonkey-proxy
 #
-# Android 适配版：修改 resource_path 以兼容 Chaquopy 环境
+# Android 适配版：增强 resource_path，多重兼容 Chaquopy 与物理文件系统
+#
 
 import base64
 import hashlib
 import json
 import os
 import sys
+import zipfile
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, IO, Optional, Union
@@ -28,19 +30,72 @@ KX_RADICALS_TAB = str.maketrans(
 )
 
 
-def resource_path(relative_path: str) -> str:
+def load_font_map_json(file_rel_path: str = "resource/font_map_table.json") -> Dict[str, str]:
     """
-    获取资源文件的路径，兼容 Chaquopy Android 环境
-
-    Args:
-        relative_path: 相对路径（相对于本文件所在目录）
-
-    Returns:
-        资源文件的绝对路径
+    全方位鲁棒加载字体哈希映射表 JSON
+    优先级：
+    1. 本地物理路径（包括 __file__ 所在目录、cwd、android_study 相对路径）
+    2. Chaquopy / sys.path 中的虚拟包和 zip 归档（如 app.imy、requirements.imy）
+    3. pkgutil 资源接口
     """
-    # 在 Chaquopy 中，__file__ 指向 .py 文件的实际路径
-    base_path = os.path.dirname(os.path.abspath(__file__))
-    return os.path.join(base_path, relative_path)
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # 1. 直接物理文件尝试
+    candidates = [
+        os.path.join(base_dir, file_rel_path),
+        os.path.join(base_dir, os.path.basename(file_rel_path)),
+        os.path.join(os.getcwd(), file_rel_path),
+        file_rel_path,
+        os.path.join(os.getcwd(), "resource", "font_map_table.json"),
+        os.path.join(base_dir, "..", "resource", "font_map_table.json"),
+    ]
+
+    for p in candidates:
+        if os.path.isfile(p):
+            try:
+                with open(p, "r", encoding="utf-8") as fp:
+                    return json.load(fp)
+            except Exception:
+                pass
+
+    # 2. 从 sys.path 中的压缩包 (如 Chaquopy 的 app.imy / requirements-common.imy) 中查找读取
+    for entry in sys.path:
+        if os.path.isfile(entry) and (entry.endswith(".zip") or entry.endswith(".imy") or entry.endswith(".apk")):
+            try:
+                with zipfile.ZipFile(entry, "r") as zf:
+                    namelist = zf.namelist()
+                    # 匹配 "resource/font_map_table.json" 或 "font_map_table.json"
+                    target_name = None
+                    for name in namelist:
+                        if name.endswith("font_map_table.json"):
+                            target_name = name
+                            break
+                    if target_name:
+                        raw_bytes = zf.read(target_name)
+                        return json.loads(raw_bytes.decode("utf-8"))
+            except Exception:
+                pass
+        elif os.path.isdir(entry):
+            p = os.path.join(entry, file_rel_path)
+            if os.path.isfile(p):
+                try:
+                    with open(p, "r", encoding="utf-8") as fp:
+                        return json.load(fp)
+                except Exception:
+                    pass
+
+    # 3. 尝试通过 pkgutil 读取
+    try:
+        import pkgutil
+        data = pkgutil.get_data("cxsecret_font", file_rel_path)
+        if not data:
+            data = pkgutil.get_data("", file_rel_path)
+        if data:
+            return json.loads(data.decode("utf-8"))
+    except Exception:
+        pass
+
+    raise FontDecodeError(f"无法在当前运行环境中定位或读取字体映射表: {file_rel_path}")
 
 
 class FontHashDAO:
@@ -49,49 +104,21 @@ class FontHashDAO:
     """
 
     def __init__(self, file_path: str = "resource/font_map_table.json"):
-        """
-        初始化字体哈希数据访问对象
-
-        Args:
-            file_path: 字体映射表JSON文件路径，相对于本文件所在目录
-
-        Raises:
-            FileNotFoundError: 当字体映射表文件不存在时
-            json.JSONDecodeError: 当字体映射表JSON格式错误时
-        """
         self.char_map: Dict[str, str] = {}  # unicode -> hash
         self.hash_map: Dict[str, str] = {}  # hash -> unicode
 
-        full_path = resource_path(file_path)
         try:
-            with open(full_path, "r", encoding="utf-8") as fp:
-                self.char_map = json.load(fp)
-                self.hash_map = {hash_val: char for char, hash_val in self.char_map.items()}
-        except (FileNotFoundError, json.JSONDecodeError) as e:
-            raise FontDecodeError(f"加载字体映射表失败: {full_path} - {e}") from e
+            self.char_map = load_font_map_json(file_path)
+            self.hash_map = {hash_val: char for char, hash_val in self.char_map.items()}
+        except Exception as e:
+            raise FontDecodeError(f"加载字体映射表失败: {file_path} - {e}") from e
 
     def find_char(self, font_hash: str) -> Optional[str]:
-        """
-        通过字体哈希值查找对应的Unicode字符编码
-
-        Args:
-            font_hash: 字体哈希值
-
-        Returns:
-            对应的Unicode字符编码，如果未找到则返回None
-        """
+        """通过字体哈希值查找对应的Unicode字符编码"""
         return self.hash_map.get(font_hash)
 
     def find_hash(self, char: str) -> Optional[str]:
-        """
-        通过Unicode字符编码查找对应的字体哈希值
-
-        Args:
-            char: Unicode字符编码 (如 "uni4E00")
-
-        Returns:
-            对应的字体哈希值，如果未找到则返回None
-        """
+        """通过Unicode字符编码查找对应的字体哈希值"""
         return self.char_map.get(char)
 
 
@@ -99,22 +126,14 @@ class FontHashDAO:
 try:
     fonthash_dao = FontHashDAO()
 except Exception as e:
-    print(f"[cxsecret_font] 初始化字体哈希数据失败 - {e}")
+    print(f"[cxsecret_font] 初始化字体哈希数据警告 - {e}")
     fonthash_dao = FontHashDAO.__new__(FontHashDAO)
     fonthash_dao.char_map = {}
     fonthash_dao.hash_map = {}
 
 
 def hash_glyph(glyph: Glyph) -> str:
-    """
-    计算TTF字体字形的哈希值
-
-    Args:
-        glyph: TTF字体字形对象
-
-    Returns:
-        字形的MD5哈希值
-    """
+    """计算TTF字体字形的哈希值"""
     if glyph.numberOfContours <= 0:
         return ""
 
@@ -136,33 +155,30 @@ def hash_glyph(glyph: Glyph) -> str:
 def font2map(font_data: Union[IO, Path, str]) -> Dict[str, str]:
     """
     从字体文件或Base64编码的字体数据中提取字形哈希映射表
-
-    Args:
-        font_data: 字体文件路径、文件对象或Base64编码的字体数据
-
-    Returns:
-        字形名称到哈希值的映射字典 ({"uni4E00": "hash值", ...})
-
-    Raises:
-        ValueError: 当无法解析字体数据时
+    兼容处理所有前缀格式与无前缀的纯 Base64 数据
     """
     font_hashmap = {}
 
-    # 处理Base64编码的字体数据
-    if isinstance(font_data, str) and font_data.startswith("data:application/font-ttf;charset=utf-8;base64,"):
+    # 处理各种 Base64 编码的字体数据（无论前缀是 font-ttf、font-woff 还是纯 base64）
+    if isinstance(font_data, str):
+        b64_content = font_data
+        if "base64," in b64_content:
+            b64_content = b64_content.split("base64,")[-1]
+        b64_clean = b64_content.strip().strip("'\"(); \r\n\t")
         try:
-            font_data = BytesIO(base64.b64decode(font_data[47:]))
+            font_data = BytesIO(base64.b64decode(b64_clean))
         except Exception as e:
             raise FontDecodeError(f"无法解码Base64字体数据: {e}") from e
 
     try:
         with TTFont(font_data, lazy=False) as font_file:
-            table: table__g_l_y_f = font_file["glyf"]
-            for name in table.glyphOrder:
-                if name.startswith("uni"):
-                    glyph_hash = hash_glyph(table.glyphs[name])
-                    if glyph_hash:
-                        font_hashmap[name] = glyph_hash
+            if "glyf" in font_file:
+                table: table__g_l_y_f = font_file["glyf"]
+                for name in table.glyphOrder:
+                    if name.startswith("uni"):
+                        glyph_hash = hash_glyph(table.glyphs[name])
+                        if glyph_hash:
+                            font_hashmap[name] = glyph_hash
     except Exception as e:
         raise FontDecodeError(f"无法解析字体文件: {e}") from e
 
@@ -172,27 +188,19 @@ def font2map(font_data: Union[IO, Path, str]) -> Dict[str, str]:
 def decrypt(dst_fontmap: Dict[str, str], encrypted_text: str) -> str:
     """
     解密超星学习通加密字体的文本
-
-    Args:
-        dst_fontmap: 目标字体的字形哈希映射表
-        encrypted_text: 加密的文本
-
-    Returns:
-        解密后的文本
     """
+    if not dst_fontmap or not fonthash_dao.hash_map:
+        return encrypted_text
+
     result = []
 
     for char in encrypted_text:
-        # 构造Unicode字符名称 (如 "uni4E00")
         char_code = f"uni{ord(char):X}"
 
-        # 查找字符在目标字体中的哈希值
         if char_code in dst_fontmap:
             dst_hash = dst_fontmap[char_code]
-            # 通过哈希值找回原始字符
             original_char_code = fonthash_dao.find_char(dst_hash)
             if original_char_code:
-                # 将Unicode编码转换为字符
                 try:
                     original_char = chr(int(original_char_code[3:], 16))
                     result.append(original_char)
@@ -200,9 +208,7 @@ def decrypt(dst_fontmap: Dict[str, str], encrypted_text: str) -> str:
                 except (ValueError, IndexError):
                     pass
 
-        # 如果无法解密，则保留原字符
         result.append(char)
 
-    # 替换解密后的康熙部首
     decrypted_text = "".join(result).translate(KX_RADICALS_TAB)
     return decrypted_text

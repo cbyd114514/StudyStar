@@ -60,6 +60,7 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.12"
+        extractPackages("resource")
         val userHome = System.getProperty("user.home").replace("\\", "/")
         val uvPython = file("$userHome/AppData/Roaming/uv/python/cpython-3.12.14-windows-x86_64-none/python.exe")
         val standardPython312 = file("C:/Program Files/Python312/python.exe")

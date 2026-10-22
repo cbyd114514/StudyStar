@@ -153,10 +153,14 @@ def font2map(font_data: Union[IO, Path, str]) -> Dict[str, str]:
     """
     font_hashmap = {}
     
-    # 处理Base64编码的字体数据
-    if isinstance(font_data, str) and font_data.startswith("data:application/font-ttf;charset=utf-8;base64,"):
+    # 处理各种 Base64 编码的字体数据
+    if isinstance(font_data, str):
+        b64_content = font_data
+        if "base64," in b64_content:
+            b64_content = b64_content.split("base64,")[-1]
+        b64_clean = b64_content.strip().strip("'\"(); \r\n\t")
         try:
-            font_data = BytesIO(base64.b64decode(font_data[47:]))
+            font_data = BytesIO(base64.b64decode(b64_clean))
         except Exception as e:
             raise FontDecodeError(f"无法解码Base64字体数据: {e}") from e
 
