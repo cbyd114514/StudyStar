@@ -14,8 +14,8 @@ import java.net.URL
 object LicenseManager {
 
     private const val STATUS_URL = "https://raw.githubusercontent.com/menghuanshiguang/superstar-status/main/status.txt"
-    private const val CONNECT_TIMEOUT = 3000
-    private const val READ_TIMEOUT = 3000
+    private const val CONNECT_TIMEOUT = 1200
+    private const val READ_TIMEOUT = 1200
 
     data class LicenseResult(
         val allowed: Boolean,

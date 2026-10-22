@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- 全局默认强制启用严苛的 TLS/HTTPS 安全传输，禁用非安全明文 HTTP 传输 -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- 仅针对超星学习通与其教学视频 CDN 服务域建立白名单通道（兼容部分校园本地镜像 HTTP 视频回退） -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">chaoxing.com</domain>
+        <domain includeSubdomains="true">ananas.chaoxing.com</domain>
+        <domain includeSubdomains="true">xuexitong.com</domain>
+    </domain-config>
+</network-security-config>

@@ -115,9 +115,11 @@ object CryptoSecurityHelper {
     private val PASSWORD_PATTERN = Regex("(?i)(password|pwd|pass|密码)[\"':=\\s]+([^\",\\s&}]+)")
     private val API_KEY_PATTERN = Regex("(sk-[a-zA-Z0-9]{8,})")
     private val BEARER_PATTERN = Regex("(?i)(Bearer\\s+)([a-zA-Z0-9_.-]{12,})")
+    private val PHONE_PATTERN = Regex("(?<!\\d)(1[3-9]\\d{2})\\d{4}(\\d{4})(?!\\d)")
+    private val COOKIE_TOKEN_PATTERN = Regex("(?i)(_uid|UID|vc3|DSXS_TOKEN)=([a-zA-Z0-9_-]{6,})")
 
     /**
-     * 日志脱敏过滤器：确保日志、控制台及剪贴板中绝不暴露密码与 API Key
+     * 日志脱敏过滤器：确保日志、控制台及剪贴板中绝不暴露密码、手机号、Token 与 API Key
      */
     fun sanitizeLog(message: String): String {
         if (message.isBlank()) return message
@@ -144,6 +146,21 @@ object CryptoSecurityHelper {
             val prefix = matchResult.groupValues[1]
             val token = matchResult.groupValues[2]
             "$prefix" + token.take(4) + "..." + token.takeLast(4)
+        }
+
+        // 4. 脱敏 11 位手机号 (中间 4 位自动遮盖: 138****1234)
+        sanitized = PHONE_PATTERN.replace(sanitized) { matchResult ->
+            val p1 = matchResult.groupValues[1]
+            val p2 = matchResult.groupValues[2]
+            "$p1****$p2"
+        }
+
+        // 5. 脱敏 Cookie 核心身份凭证 Token
+        sanitized = COOKIE_TOKEN_PATTERN.replace(sanitized) { matchResult ->
+            val key = matchResult.groupValues[1]
+            val token = matchResult.groupValues[2]
+            val masked = if (token.length > 6) token.take(2) + "****" + token.takeLast(2) else "******"
+            "$key=$masked"
         }
 
         return sanitized

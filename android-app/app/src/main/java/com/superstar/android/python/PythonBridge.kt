@@ -4,6 +4,7 @@ import android.content.Context
 import com.chaquo.python.Python
 import com.chaquo.python.android.AndroidPlatform
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 
 /**
@@ -104,24 +105,21 @@ object PythonBridge {
             // 获取 Python 端缓存的日志
             flushPythonLogs(studyModule, onLog)
 
-            var isSuccess = false
-            var responseMsg = "用户名或密码错误"
-
-            try {
+            val (isSuccess, responseMsg) = try {
                 if (resultStr.startsWith("{")) {
                     val json = org.json.JSONObject(resultStr)
-                    isSuccess = json.optBoolean("success", false)
-                    responseMsg = json.optString("msg", if (isSuccess) "登录成功" else "用户名或密码错误")
+                    val success = json.optBoolean("success", false)
+                    val msg = json.optString("msg", if (success) "登录成功" else "用户名或密码错误")
+                    Pair(success, msg)
                 } else if (resultStr == "success") {
-                    isSuccess = true
-                    responseMsg = "登录成功"
+                    Pair(true, "登录成功")
                 } else {
-                    isSuccess = false
-                    responseMsg = if (resultStr.isBlank() || resultStr == "failure") "用户名或密码错误" else resultStr
+                    val msg = if (resultStr.isBlank() || resultStr == "failure") "用户名或密码错误" else resultStr
+                    Pair(false, msg)
                 }
             } catch (_: Throwable) {
-                isSuccess = (resultStr == "success")
-                responseMsg = if (isSuccess) "登录成功" else "用户名或密码错误"
+                val success = (resultStr == "success")
+                Pair(success, if (success) "登录成功" else "用户名或密码错误")
             }
 
             if (isSuccess) {
@@ -254,42 +252,64 @@ object PythonBridge {
             onLog("刷课任务已启动，开始轮询日志...")
 
             // 启动前先微等待 500ms，确保 Python 端后台线程初始化完毕
-            Thread.sleep(500)
+            delay(500)
 
-            // 轮询等待刷课任务完成
+            // 高性能轮询等待刷课任务完成（单次原子性获取状态与增量日志，大幅压缩 JNI 与线程开销）
             var lastProgress = 0f
+            var lastCourse = ""
+            var lastChapter = ""
+            var lastVideoProgress = ""
+            var lastQuizProgress = ""
             var noProgressCount = 0
-            val maxNoProgressCount = 1200 // 最多等待 1200 * 500ms = 600s = 10 分钟无进度则超时
+            val maxNoProgressCount = 1000 // 1000 * 600ms = 600s = 10 分钟无进度则超时
+
             while (true) {
-                // 检查任务是否仍在运行
-                val isRunning = studyModule.callAttr("is_study_running")?.toBoolean() ?: false
+                // 单次 JNI 调度获取完整运行状态与增量日志，杜绝 7 次重复跨语言调用与 GIL 争用
+                val statusStr = studyModule.callAttr("get_study_status")?.toString() ?: "{}"
+                val statusJson = org.json.JSONObject(statusStr)
 
-                // 获取实时日志
-                pollStudyLogs(studyModule, onLog)
+                val isRunning = statusJson.optBoolean("running", false)
+                val progressFloat = statusJson.optDouble("progress", 0.0).toFloat()
+                val currentCourse = statusJson.optString("course", "")
+                val currentChapter = statusJson.optString("chapter", "")
+                val videoProgress = statusJson.optString("video_progress", "")
+                val quizProgress = statusJson.optString("quiz_progress", "")
+                val logsArr = statusJson.optJSONArray("logs")
 
-                // 获取进度与当前课时/章节/视频分秒/答题进度
-                val progress = studyModule.callAttr("get_study_progress")?.toDouble() ?: 0.0
-                val progressFloat = progress.toFloat()
-                val currentCourse = studyModule.callAttr("get_current_course")?.toString() ?: ""
-                val currentChapter = studyModule.callAttr("get_current_chapter")?.toString() ?: ""
-                val videoProgress = studyModule.callAttr("get_video_progress")?.toString() ?: ""
-                val quizProgress = studyModule.callAttr("get_quiz_progress")?.toString() ?: ""
-                onStatusUpdate(progressFloat, currentCourse, currentChapter, videoProgress, quizProgress)
+                // 获取实时增量日志并回调
+                if (logsArr != null && logsArr.length() > 0) {
+                    for (i in 0 until logsArr.length()) {
+                        val msg = logsArr.optString(i, "")
+                        if (msg.isNotBlank()) onLog(msg)
+                    }
+                }
+
+                // 核心防抖优化：仅在状态真正发生变化时才触发 onStatusUpdate，杜绝无效重绘
+                if (progressFloat != lastProgress || currentCourse != lastCourse ||
+                    currentChapter != lastChapter || videoProgress != lastVideoProgress ||
+                    quizProgress != lastQuizProgress
+                ) {
+                    lastCourse = currentCourse
+                    lastChapter = currentChapter
+                    lastVideoProgress = videoProgress
+                    lastQuizProgress = quizProgress
+                    onStatusUpdate(progressFloat, currentCourse, currentChapter, videoProgress, quizProgress)
+                }
 
                 if (progressFloat > lastProgress) {
                     onProgress(progressFloat)
                     lastProgress = progressFloat
-                    noProgressCount = 0 // 有进度更新，重置超时计数
+                    noProgressCount = 0
                 } else {
                     noProgressCount++
                 }
 
                 if (!isRunning) {
-                    // 二次确认，防止瞬间调度延迟引起误判
-                    Thread.sleep(500)
-                    val doubleCheckRunning = studyModule.callAttr("is_study_running")?.toBoolean() ?: false
-                    if (!doubleCheckRunning) {
-                        val currResult = studyModule.callAttr("get_study_result")?.toString() ?: ""
+                    delay(600)
+                    val doubleCheck = studyModule.callAttr("get_study_status")?.toString() ?: "{}"
+                    val doubleCheckJson = org.json.JSONObject(doubleCheck)
+                    if (!doubleCheckJson.optBoolean("running", false)) {
+                        val currResult = doubleCheckJson.optString("result", "")
                         if (currResult != "running") {
                             onLog("刷课任务已结束")
                             break
@@ -297,18 +317,15 @@ object PythonBridge {
                     }
                 }
 
-                // 超时保护：如果长时间无进度更新，强制退出
                 if (noProgressCount >= maxNoProgressCount) {
                     onLog("刷课任务超时（10分钟无进度更新），强制停止")
-                    // 尝试通知 Python 端停止
                     try {
                         studyModule.callAttr("stop_study")
                     } catch (_: Exception) {}
                     break
                 }
 
-                // 休眠一段时间再轮询
-                Thread.sleep(500)
+                delay(600)
             }
 
             // 任务结束，获取最终结果和剩余日志
@@ -350,5 +367,17 @@ object PythonBridge {
         } catch (e: Exception) {
             "Python 环境错误: ${e.message}"
         }
+    }
+
+    /**
+     * 清除指定账号在 Python 侧持久化的会话凭证（退出登录时彻底清除残留，保障账号安全隔离）
+     */
+    fun clearUserCookies(username: String?) {
+        if (username.isNullOrBlank()) return
+        try {
+            val py = Python.getInstance()
+            val studyModule = py.getModule("android_study")
+            studyModule.callAttr("clear_user_cookies", username)
+        } catch (_: Throwable) {}
     }
 }

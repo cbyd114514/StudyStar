@@ -12,8 +12,8 @@ android {
         applicationId = "com.superstar.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "1.5.1"
+        versionCode = 8
+        versionName = "1.5.2"
 
         ndk {
             abiFilters += listOf("arm64-v8a")

@@ -132,6 +132,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             stopStudy()
             userManuallyLoggedOut.value = true
+            val prevUser = _loginState.value.username ?: _loginState.value.savedUsername
             _loginState.value = LoginState(
                 savedUsername = _loginState.value.savedUsername,
                 savedPassword = _loginState.value.savedPassword
@@ -141,6 +142,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 llmConfig = null,
                 courseIds = null
             )
+            // 安全机制：清除该账号在底层 Python 引擎中持久化的会话凭证，杜绝串号风险
+            if (!prevUser.isNullOrBlank()) {
+                PythonBridge.clearUserCookies(prevUser)
+            }
             _currentPage.value = Page.LOGIN
             addLog("已退出登录", LogType.INFO)
         }
@@ -488,16 +493,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 coursesJson = coursesJson,
                 onLog = { msg -> addLog(msg) },
                 onProgress = { progress ->
-                    _studyState.value = _studyState.value.copy(progress = progress)
+                    if (_studyState.value.progress != progress) {
+                        _studyState.value = _studyState.value.copy(progress = progress)
+                    }
                 },
                 onStatusUpdate = { progress, course, chapter, videoProgress, quizProgress ->
-                    _studyState.value = _studyState.value.copy(
-                        progress = progress,
-                        currentCourse = course,
-                        currentChapter = chapter,
-                        videoProgress = videoProgress,
-                        quizProgress = quizProgress
-                    )
+                    val curr = _studyState.value
+                    if (curr.progress != progress || curr.currentCourse != course ||
+                        curr.currentChapter != chapter || curr.videoProgress != videoProgress ||
+                        curr.quizProgress != quizProgress
+                    ) {
+                        _studyState.value = curr.copy(
+                            progress = progress,
+                            currentCourse = course,
+                            currentChapter = chapter,
+                            videoProgress = videoProgress,
+                            quizProgress = quizProgress
+                        )
+                    }
                 },
                 onComplete = { success, msg ->
                     _studyState.value = _studyState.value.copy(
@@ -714,6 +727,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _deduplicatedLogs.value = emptyList()
     }
 
+    @androidx.compose.runtime.Immutable
     data class LoginState(
         val isLoading: Boolean = false,
         val isLoggedIn: Boolean = false,
@@ -724,6 +738,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val savedPassword: String? = null   // 从本地加载的已保存密码
     )
 
+    @androidx.compose.runtime.Immutable
     data class StudyState(
         val isRunning: Boolean = false,
         val isCompleted: Boolean = false,
@@ -738,6 +753,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val quizProgress: String = ""
     )
 
+    @androidx.compose.runtime.Immutable
     data class LogEntry(
         val id: Long = 0L,
         val message: String,
@@ -749,6 +765,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         INFO, SUCCESS, WARNING, ERROR
     }
 
+    @androidx.compose.runtime.Immutable
     sealed class LlmTestState {
         object Idle : LlmTestState()
         object Testing : LlmTestState()

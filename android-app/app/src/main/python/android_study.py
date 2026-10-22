@@ -197,51 +197,65 @@ def set_cookies_dir(dir_path: str):
     _cookies_dir = dir_path
 
 
-def _get_cookies_path() -> str:
-    """获取 cookies 文件完整路径"""
+def _get_cookies_path(username: Optional[str] = None) -> str:
+    """获取指定账号的 cookies 文件完整路径，实现跨账号强隔离与防护"""
+    if username and str(username).strip():
+        user_hash = hashlib.sha256(str(username).strip().encode("utf-8")).hexdigest()[:16]
+        filename = f"chaoxing_cookies_{user_hash}.txt"
+    else:
+        filename = COOKIES_FILENAME
     if _cookies_dir:
-        return os.path.join(_cookies_dir, COOKIES_FILENAME)
-    return COOKIES_FILENAME
+        return os.path.join(_cookies_dir, filename)
+    return filename
 
 
-def save_cookies(session: requests.Session):
-    """保存 session cookies 到文件，与原始项目 api/cookies.py save_cookies() 一致"""
+def save_cookies(session: requests.Session, username: Optional[str] = None):
+    """保存 session cookies 到文件，隔离不同账号会话凭据"""
     buffer = ""
-    path = _get_cookies_path()
+    path = _get_cookies_path(username)
     try:
-        with open(path, "w") as f:
+        with open(path, "w", encoding="utf-8") as f:
             for k, v in session.cookies.items():
                 buffer += f"{k}={v};"
             buffer = buffer.removesuffix(";")
             f.write(buffer)
-        _log(f"[Cookie] 已保存 {len(session.cookies.items())} 个 cookies 到 {path}")
+        _log(f"[Cookie] 已安全持久化 {len(session.cookies.items())} 项会话凭据")
     except Exception as e:
-        _log(f"[Cookie] 保存 cookies 失败: {e}")
+        _log(f"[Cookie] 保存会话凭据失败: {e}")
 
 
-def use_cookies() -> dict:
-    """从文件加载 cookies，与原始项目 api/cookies.py use_cookies() 一致"""
-    path = _get_cookies_path()
+def use_cookies(username: Optional[str] = None) -> dict:
+    """从文件加载专属 cookies，严格杜绝输出任何明文敏感 Token 规避安全审计隐患"""
+    path = _get_cookies_path(username)
     if not os.path.exists(path):
-        _log(f"[Cookie] cookies 文件不存在: {path}")
         return {}
 
     cookies = {}
     try:
-        with open(path, "r") as f:
+        with open(path, "r", encoding="utf-8") as f:
             buffer = f.read().strip()
             if not buffer:
-                _log(f"[Cookie] cookies 文件为空: {path}")
                 return {}
             for item in buffer.split(";"):
                 item = item.strip()
                 if "=" in item:
                     k, v = item.split("=", 1)
                     cookies[k] = v
-        _log(f"[Cookie] 已加载 {len(cookies)} 个 cookies 从 {path}")
-        _log(f"[Cookie] cookies 内容: {dict(list(cookies.items())[:5])}...")  # 只显示前5个
+        _log(f"[Cookie] 已安全载入 {len(cookies)} 项专属会话凭据")
     except Exception as e:
-        _log(f"[Cookie] 加载 cookies 失败: {e}")
+        _log(f"[Cookie] 载入会话凭据失败: {e}")
+    return cookies
+
+
+def clear_user_cookies(username: Optional[str] = None):
+    """用户登出时彻底删除本地会话缓存，防止会话残留与越权"""
+    try:
+        path = _get_cookies_path(username)
+        if os.path.exists(path):
+            os.remove(path)
+            _log("[Cookie] 已清除本地会话缓存")
+    except Exception as e:
+        _log(f"[Cookie] 清除会话缓存失败: {e}")
 
     return cookies
 
@@ -453,18 +467,25 @@ class AndroidStudyEngine:
         # 设置全局日志回调，使 save_cookies/use_cookies 的日志也能显示在 UI 上
         set_log_callback(self.log)
         self.session = requests.Session()
+        try:
+            from requests.adapters import HTTPAdapter
+            adapter = HTTPAdapter(pool_connections=20, pool_maxsize=20, max_retries=2)
+            self.session.mount("https://", adapter)
+            self.session.mount("http://", adapter)
+        except Exception:
+            pass
         self.session.headers.update(self.HEADERS)
-        # 加载已保存的 cookies（登录状态保持）
+        # 加载已保存的 cookies（登录状态保持，按账号隔离）
         # 与原始项目 SessionManager.__init__() 中 self._session.cookies.update(use_cookies()) 一致
         self.log("[Cookie] 正在检查已保存的登录状态...")
-        saved_cookies = use_cookies()
+        saved_cookies = use_cookies(self.username)
         if saved_cookies:
             self.session.cookies.update(saved_cookies)
             self.log(f"[Cookie] 已加载 {len(saved_cookies)} 个 cookies")
             # 检查关键 cookie
             has_uid = "_uid" in saved_cookies
             has_fid = "fid" in saved_cookies
-            self.log(f"[Cookie] 关键 cookies: _uid={has_uid}, fid={has_fid}")
+            self.log(f"[Cookie] 关键凭据状态: _uid={has_uid}, fid={has_fid}")
         else:
             self.log("[Cookie] 未找到已保存的登录状态")
         self.cipher = AESCipher()
@@ -514,7 +535,7 @@ class AndroidStudyEngine:
         if login_with_cookies:
             self.log("[Cookie] ===== 尝试使用已保存的登录状态 =====")
             # 重新从文件加载 cookies（可能有更新）
-            saved_cookies = use_cookies()
+            saved_cookies = use_cookies(self.username)
             if saved_cookies:
                 self.session.cookies.update(saved_cookies)
                 self.log(f"[Cookie] 已更新 session cookies，当前共 {len(self.session.cookies)} 个 cookies")
@@ -553,12 +574,12 @@ class AndroidStudyEngine:
             resp = self.session.post(url, data=data, timeout=30)
             self.log(f"[登录] 响应状态码: {resp.status_code}")
             result = resp.json()
-            self.log(f"[登录] 响应内容: {result}")
+            self.log(f"[登录] 验证响应状态: {result.get('status')}")
             if result.get("status") == True:
                 self.log("[登录] ===== 登录成功! =====")
-                # 保存 cookies 到文件（登录状态保持）
+                # 保存 cookies 到文件（登录状态保持，按账号隔离）
                 self.log(f"[Cookie] 正在保存 {len(self.session.cookies)} 个 cookies...")
-                save_cookies(self.session)
+                save_cookies(self.session, self.username)
                 self.log("[Cookie] ===== 登录状态已持久化 =====")
                 return True
             else:
@@ -2438,6 +2459,12 @@ def get_current_chapter():
 def get_study_status():
     global _study_running, _study_progress, _current_course_name, _current_chapter_name, _study_result
     global _current_video_progress, _current_video_name, _current_quiz_progress, _current_quiz_title
+    global _study_log_buffer
+
+    # 原子性取出并清空当前实时日志增量（合并到单次 JNI 调度，极大降低跨语言上下文切换开销）
+    logs = list(_study_log_buffer)
+    _study_log_buffer.clear()
+
     return json.dumps({
         "running": bool(_study_running),
         "progress": float(_study_progress),
@@ -2447,7 +2474,8 @@ def get_study_status():
         "video_name": _current_video_name,
         "quiz_progress": _current_quiz_progress,
         "quiz_title": _current_quiz_title,
-        "result": str(_study_result or "")
+        "result": str(_study_result or ""),
+        "logs": logs
     })
 
 def set_study_progress(progress):
