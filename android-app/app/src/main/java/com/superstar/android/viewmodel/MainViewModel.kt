@@ -58,17 +58,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun clearIssues() {
         _recentIssues.value = emptyList()
-        _logs.value = emptyList()
         _deduplicatedLogs.value = emptyList()
     }
 
-    // 原始日志（全部保留，用于 UI 直接显示）
-    private val _logs = MutableStateFlow<List<LogEntry>>(emptyList())
-    val logs: StateFlow<List<LogEntry>> = _logs.asStateFlow()
-
-    // 去重后的日志（连续重复的日志合并计数，用于需要精简视图的场景）
+    // 去重精简运行日志（连续重复日志合并计数，轻量高效，杜绝垃圾回收与渲染卡顿）
     private val _deduplicatedLogs = MutableStateFlow<List<LogEntry>>(emptyList())
     val deduplicatedLogs: StateFlow<List<LogEntry>> = _deduplicatedLogs.asStateFlow()
+    val logs: StateFlow<List<LogEntry>> get() = deduplicatedLogs
 
     // 课程列表
     private val _courses = MutableStateFlow<List<CourseInfo>>(emptyList())
@@ -224,9 +220,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // 底部导航栏当前选中的 tab (保留向后兼容)
-    private val _selectedTab = MutableStateFlow(0)
-    val selectedTab: StateFlow<Int> = _selectedTab.asStateFlow()
 
     init {
         initializePython()
@@ -635,10 +628,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _currentPage.value = page
     }
 
-    fun selectTab(index: Int) {
-        _selectedTab.value = index
-    }
-
     private var nextLogId = 1L
     private val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     private var lastErrorNotifyTime = 0L
@@ -693,7 +682,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
 
-        // 1. 增量去重更新（轻量上限 25 条，极大减轻主线程数组复制与 MIUI/HyperOS GC 掉帧）
+        // 增量去重更新（轻量上限 25 条，极大减轻主线程数组复制与 MIUI/HyperOS GC 掉帧）
         val currentDedup = _deduplicatedLogs.value.toMutableList()
         if (currentDedup.isEmpty()) {
             currentDedup.add(newEntry)
@@ -712,18 +701,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentDedup.removeAt(0)
         }
         _deduplicatedLogs.value = currentDedup
-
-        // 2. 原始日志记录（轻量上限 25 条，杜绝长期运行内存泄漏与渲染卡顿）
-        val currentLogs = _logs.value.toMutableList()
-        currentLogs.add(newEntry)
-        if (currentLogs.size > 25) {
-            currentLogs.removeAt(0)
-        }
-        _logs.value = currentLogs
     }
 
     fun clearLogs() {
-        _logs.value = emptyList()
         _deduplicatedLogs.value = emptyList()
     }
 

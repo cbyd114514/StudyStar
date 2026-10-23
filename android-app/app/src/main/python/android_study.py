@@ -87,11 +87,15 @@ def get_and_clear_logs() -> list:
 
 
 def _log(msg: str):
-    """输出日志（通过全局回调或缓冲区）"""
+    """输出日志（通过全局回调或缓冲区，带上限防护避免内存膨胀）"""
     # 始终追加到缓冲区
     _log_buffer.append(msg)
+    if len(_log_buffer) > 200:
+        _log_buffer.pop(0)
     # 也追加到实时日志缓冲区（供 Kotlin 轮询）
     _study_log_buffer.append(msg)
+    if len(_study_log_buffer) > 200:
+        _study_log_buffer.pop(0)
     # 如果有回调，也通过回调发送
     if _log_callback:
         try:
@@ -256,8 +260,6 @@ def clear_user_cookies(username: Optional[str] = None):
             _log("[Cookie] 已清除本地会话缓存")
     except Exception as e:
         _log(f"[Cookie] 清除会话缓存失败: {e}")
-
-    return cookies
 
 
 class AESCipher:
