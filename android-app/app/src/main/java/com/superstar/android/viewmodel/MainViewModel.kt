@@ -175,7 +175,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     /**
      * 保存大模型配置到当前登录账号（实现 API Key 随账号绑定保存）
      */
-    fun saveUserLlmConfig(llmConfig: String) {
+    fun saveUserLlmConfig(llmConfig: String, logSuccess: Boolean = false) {
         val username = _loginState.value.username ?: _loginState.value.savedUsername ?: ""
         _studyState.value = _studyState.value.copy(llmConfig = llmConfig.ifBlank { null })
         if (username.isBlank()) return
@@ -185,11 +185,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 context.configDataStore.edit { prefs ->
                     if (llmConfig.isNotBlank()) {
                         prefs[getUserLlmKey(username)] = llmConfig
+                        prefs[LLM_CONFIG_KEY] = llmConfig
                     } else {
                         prefs.remove(getUserLlmKey(username))
+                        prefs.remove(LLM_CONFIG_KEY)
                     }
                 }
-                addLog("API Key 与大模型配置已保存至当前账号", LogType.SUCCESS)
+                if (logSuccess) {
+                    addLog("API Key 与大模型配置已保存至当前账号", LogType.SUCCESS)
+                }
             } catch (_: Exception) {}
         }
     }
@@ -311,7 +315,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         speed: Double,
         jobs: Int,
         courseIds: String?,
-        llmConfig: String? = null
+        llmConfig: String? = null,
+        logSuccess: Boolean = false
     ) {
         viewModelScope.launch {
             _studyState.value = _studyState.value.copy(
@@ -335,9 +340,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         prefs[LLM_CONFIG_KEY] = llmConfig
                     }
                 }
-                addLog("配置已保存: 速度=${speed}x, 并发=${jobs}", LogType.SUCCESS)
+                if (logSuccess) {
+                    addLog("配置已保存: 速度=${speed}x, 并发=${jobs}", LogType.SUCCESS)
+                }
             } catch (e: Exception) {
-                addLog("保存配置失败: ${e.message}", LogType.ERROR)
+                // 静默处理，不打扰用户
             }
         }
     }

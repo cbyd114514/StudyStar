@@ -36,6 +36,7 @@ import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Layers
 import androidx.compose.material.icons.outlined.PlayCircleOutline
@@ -133,8 +134,10 @@ fun DashboardScreen(
     var configLlmKey by remember { mutableStateOf("") }
     var configLlmModel by remember { mutableStateOf("") }
 
-    var showCourseList by remember { mutableStateOf(false) }
+    var showCourseList by remember { mutableStateOf(true) }
+    var showCourseTutorial by remember { mutableStateOf(false) }
     var showLlmSection by remember { mutableStateOf(false) }
+    var showAiGuide by remember { mutableStateOf(false) }
 
     // 从 studyState.llmConfig 同步（账号隔离：切换账号时若无配置则清空）
     LaunchedEffect(studyState.llmConfig) {
@@ -155,15 +158,53 @@ fun DashboardScreen(
         }
     }
 
-    fun buildLlmConfigJson(): String? {
-        if (configLlmProvider.isBlank()) return null
+    fun buildLlmConfigJson(
+        provider: String = configLlmProvider,
+        endpoint: String = configLlmEndpoint,
+        key: String = configLlmKey,
+        model: String = configLlmModel
+    ): String? {
+        if (provider.isBlank()) return null
         val map = linkedMapOf(
-            "provider" to configLlmProvider,
-            "endpoint" to configLlmEndpoint,
-            "key" to configLlmKey,
-            "model" to configLlmModel
+            "provider" to provider,
+            "endpoint" to endpoint,
+            "key" to key,
+            "model" to model
         )
         return com.google.gson.Gson().toJson(map)
+    }
+
+    // 自动保存当前大模型配置与 API Key 到当前账号
+    fun autoSaveLlm(
+        provider: String = configLlmProvider,
+        endpoint: String = configLlmEndpoint,
+        key: String = configLlmKey,
+        model: String = configLlmModel
+    ) {
+        val json = buildLlmConfigJson(provider, endpoint, key, model)
+        if (json != null) {
+            viewModel.saveUserLlmConfig(json)
+            viewModel.updateConfig(
+                speed = configSpeed.toDouble(),
+                jobs = configJobs,
+                courseIds = configCourseIds.ifBlank { null },
+                llmConfig = json
+            )
+        }
+    }
+
+    // 自动保存核心刷课参数
+    fun autoSaveCoreConfig(
+        speed: Float = configSpeed,
+        jobs: Int = configJobs,
+        courseIds: String = configCourseIds
+    ) {
+        viewModel.updateConfig(
+            speed = speed.toDouble(),
+            jobs = jobs,
+            courseIds = courseIds.ifBlank { null },
+            llmConfig = buildLlmConfigJson()
+        )
     }
 
     Scaffold(
@@ -303,40 +344,40 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 运行问题与重点提醒卡片（轻量展示当前状态与出现的具体问题，绝无冗余日志与晦涩技术错误码） ---
-            item(key = "issues_card", contentType = "card") {
-                ElevatedCard(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
-                    colors = CardDefaults.elevatedCardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(18.dp)
+            // --- 运行问题与重点提醒卡片：仅在出现异常问题时弹出来，运行正常时不显示 ---
+            if (recentIssues.isNotEmpty()) {
+                item(key = "issues_card", contentType = "card") {
+                    ElevatedCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.large,
+                        colors = CardDefaults.elevatedCardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                        ),
+                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(18.dp)
                         ) {
-                            Icon(
-                                imageVector = if (recentIssues.isEmpty()) Icons.Outlined.CheckCircle else Icons.Outlined.ErrorOutline,
-                                contentDescription = null,
-                                tint = if (recentIssues.isEmpty()) StatusSuccess else MaterialTheme.colorScheme.error,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = AppStrings.issuesTitle(currentLang),
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.weight(1f)
-                            )
-                            if (recentIssues.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.ErrorOutline,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = AppStrings.issuesTitle(currentLang),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.weight(1f)
+                                )
                                 OutlinedButton(
                                     onClick = { viewModel.clearIssues() },
                                     shape = MaterialTheme.shapes.small,
@@ -346,43 +387,17 @@ fun DashboardScreen(
                                     Text(AppStrings.clearIssuesBtn(currentLang), fontSize = 11.sp)
                                 }
                             }
-                        }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(10.dp))
 
-                        if (recentIssues.isEmpty()) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = MaterialTheme.shapes.medium,
-                                color = StatusSuccess.copy(alpha = 0.08f)
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Check,
-                                        contentDescription = null,
-                                        tint = StatusSuccess,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = AppStrings.noIssues(currentLang),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                        } else {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 recentIssues.takeLast(5).reversed().forEach { issue ->
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
                                         shape = MaterialTheme.shapes.medium,
                                         color = if (issue.type == MainViewModel.LogType.ERROR)
-                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
-                                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.35f)
+                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
+                                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
                                     ) {
                                         Row(
                                             modifier = Modifier.padding(10.dp),
@@ -411,7 +426,7 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 核心参数配置卡片 ---
+            // --- 核心参数配置卡片（默认自动保存配置，无冗余保存按钮） ---
             item(key = "config_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -444,7 +459,7 @@ fun DashboardScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // 速度调节
+                        // 速度调节（滑动即自动保存）
                         MaterialSliderRow(
                             icon = Icons.Outlined.Speed,
                             label = AppStrings.playSpeed(currentLang),
@@ -452,12 +467,15 @@ fun DashboardScreen(
                             valueDisplay = "${String.format("%.1f", configSpeed)}x",
                             valueRange = 0.5f..3.0f,
                             steps = 25,
-                            onValueChange = { configSpeed = it }
+                            onValueChange = { configSpeed = it },
+                            onValueChangeFinished = {
+                                autoSaveCoreConfig(speed = configSpeed)
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // 并发调节
+                        // 并发调节（滑动即自动保存）
                         MaterialSliderRow(
                             icon = Icons.Outlined.Layers,
                             label = AppStrings.concurrencyJobs(currentLang),
@@ -465,17 +483,21 @@ fun DashboardScreen(
                             valueDisplay = AppStrings.jobsUnit(currentLang, configJobs),
                             valueRange = 1f..8f,
                             steps = 7,
-                            onValueChange = { configJobs = it.toInt() }
+                            onValueChange = { configJobs = it.toInt() },
+                            onValueChangeFinished = {
+                                autoSaveCoreConfig(jobs = configJobs)
+                            }
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // 指定课程 ID
+                        // 指定课程 ID（输入即自动保存）
                         OutlinedTextField(
                             value = configCourseIds,
                             onValueChange = {
                                 configCourseIds = it
                                 viewModel.updateCourseSelection(it)
+                                autoSaveCoreConfig(courseIds = it)
                             },
                             label = { Text(AppStrings.customCourseIdLabel(currentLang)) },
                             placeholder = { Text(AppStrings.customCourseIdPlaceholder(currentLang)) },
@@ -483,26 +505,6 @@ fun DashboardScreen(
                             singleLine = true,
                             shape = MaterialTheme.shapes.medium
                         )
-
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // 保存配置按钮
-                        FilledTonalButton(
-                            onClick = {
-                                viewModel.updateConfig(
-                                    speed = configSpeed.toDouble(),
-                                    jobs = configJobs,
-                                    courseIds = configCourseIds.ifBlank { null },
-                                    llmConfig = buildLlmConfigJson()
-                                )
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(AppStrings.saveConfigBtn(currentLang), fontWeight = FontWeight.SemiBold)
-                        }
                     }
                 }
             }
@@ -558,7 +560,10 @@ fun DashboardScreen(
 
                         // 获取课程按钮
                         OutlinedButton(
-                            onClick = { viewModel.fetchCourses() },
+                            onClick = {
+                                showCourseList = true
+                                viewModel.fetchCourses()
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
                             enabled = !isLoadingCourses
@@ -578,12 +583,51 @@ fun DashboardScreen(
                             }
                         }
 
-                        // 学习通网页版核对提示与链接
+                        // 下方核对教程：改成“感叹号一个圈”，点击后再展开教程内容
+                        Spacer(modifier = Modifier.height(10.dp))
+                        Surface(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.medium)
+                                .clickable { showCourseTutorial = !showCourseTutorial },
+                            color = MaterialTheme.colorScheme.surfaceContainerLow
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Info,
+                                    contentDescription = AppStrings.webVerifyTitle(currentLang),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = AppStrings.webVerifyTitle(currentLang),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Icon(
+                                    imageVector = if (showCourseTutorial) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
+
+                        AnimatedVisibility(visible = showCourseTutorial) {
+                            Column {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                CourseWebVerificationBanner(currentLang = currentLang)
+                            }
+                        }
+
+                        // 课程列表展开状态提示（默认自动展开）
                         if (courses.isNotEmpty()) {
-                            Spacer(modifier = Modifier.height(10.dp))
-
-                            CourseWebVerificationBanner(currentLang = currentLang)
-
                             Spacer(modifier = Modifier.height(10.dp))
                             Surface(
                                 modifier = Modifier
@@ -644,6 +688,7 @@ fun DashboardScreen(
                                         val allIds = courses.joinToString(",") { it.courseId }
                                         configCourseIds = allIds
                                         viewModel.updateCourseSelection(allIds)
+                                        autoSaveCoreConfig(courseIds = allIds)
                                     },
                                     shape = MaterialTheme.shapes.small,
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -656,6 +701,7 @@ fun DashboardScreen(
                                     onClick = {
                                         configCourseIds = ""
                                         viewModel.updateCourseSelection("")
+                                        autoSaveCoreConfig(courseIds = "")
                                     },
                                     shape = MaterialTheme.shapes.small,
                                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
@@ -698,6 +744,7 @@ fun DashboardScreen(
                             val newCourseIds = currentIds.joinToString(",")
                             configCourseIds = newCourseIds
                             viewModel.updateCourseSelection(newCourseIds)
+                            autoSaveCoreConfig(courseIds = newCourseIds)
                         }
                     )
                 }
@@ -728,30 +775,61 @@ fun DashboardScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.AutoAwesome,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.tertiary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.aiConfigTitle(currentLang),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
+                                Row(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable { showLlmSection = !showLlmSection },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.AutoAwesome,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.tertiary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = AppStrings.aiConfigTitle(currentLang),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
                                 LlmStatusBadge(
                                     llmTestState = llmTestState,
                                     configLlmProvider = configLlmProvider,
                                     currentLang = currentLang
                                 )
-                                Icon(
-                                    imageVector = if (showLlmSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+
+                                // 小角落里的使用说明圆圈图标按钮（冒号/问号加一个圈）
+                                IconButton(
+                                    onClick = {
+                                        showAiGuide = !showAiGuide
+                                        if (!showLlmSection && showAiGuide) {
+                                            showLlmSection = true
+                                        }
+                                    },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                                        contentDescription = AppStrings.aiGuideTitle(currentLang),
+                                        tint = if (showAiGuide) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(19.dp)
+                                    )
+                                }
+
+                                IconButton(
+                                    onClick = { showLlmSection = !showLlmSection },
+                                    modifier = Modifier.size(32.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (showLlmSection) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             }
                         }
 
@@ -767,34 +845,37 @@ fun DashboardScreen(
                                 configLlmKey = configLlmKey,
                                 configLlmModel = configLlmModel,
                                 llmTestState = llmTestState,
+                                showAiGuide = showAiGuide,
                                 onProviderChange = { provider ->
                                     configLlmProvider = provider
+                                    var endpoint = configLlmEndpoint
+                                    var model = configLlmModel
                                     if (provider == "DeepSeek") {
-                                        configLlmEndpoint = "https://api.deepseek.com/v1/chat/completions"
-                                        configLlmModel = "deepseek-chat"
+                                        endpoint = "https://api.deepseek.com/v1/chat/completions"
+                                        model = "deepseek-chat"
                                     } else if (provider == "SiliconFlow") {
-                                        configLlmEndpoint = "https://api.siliconflow.cn/v1/chat/completions"
-                                        configLlmModel = "deepseek-ai/DeepSeek-V3"
+                                        endpoint = "https://api.siliconflow.cn/v1/chat/completions"
+                                        model = "deepseek-ai/DeepSeek-V3"
                                     }
+                                    configLlmEndpoint = endpoint
+                                    configLlmModel = model
                                     viewModel.clearLlmTestState()
-                                    val json = buildLlmConfigJson()
-                                    if (json != null) viewModel.saveUserLlmConfig(json)
+                                    autoSaveLlm(provider = provider, endpoint = endpoint, model = model)
                                 },
                                 onEndpointChange = {
                                     configLlmEndpoint = it
                                     viewModel.clearLlmTestState()
+                                    autoSaveLlm(endpoint = it)
                                 },
                                 onKeyChange = {
                                     configLlmKey = it
                                     viewModel.clearLlmTestState()
+                                    autoSaveLlm(key = it)
                                 },
                                 onModelChange = {
                                     configLlmModel = it
                                     viewModel.clearLlmTestState()
-                                },
-                                onSaveToAccount = {
-                                    val json = buildLlmConfigJson()
-                                    viewModel.saveUserLlmConfig(json.orEmpty())
+                                    autoSaveLlm(model = it)
                                 },
                                 onTestConnection = {
                                     val json = buildLlmConfigJson()
@@ -1106,7 +1187,8 @@ private fun MaterialSliderRow(
     valueDisplay: String,
     valueRange: ClosedFloatingPointRange<Float>,
     steps: Int,
-    onValueChange: (Float) -> Unit
+    onValueChange: (Float) -> Unit,
+    onValueChangeFinished: (() -> Unit)? = null
 ) {
     Column {
         Row(
@@ -1142,6 +1224,7 @@ private fun MaterialSliderRow(
         Slider(
             value = value,
             onValueChange = onValueChange,
+            onValueChangeFinished = onValueChangeFinished,
             valueRange = valueRange,
             steps = steps,
             modifier = Modifier.fillMaxWidth(),
@@ -1234,11 +1317,11 @@ private fun AiConfigForm(
     configLlmKey: String,
     configLlmModel: String,
     llmTestState: MainViewModel.LlmTestState,
+    showAiGuide: Boolean,
     onProviderChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
     onKeyChange: (String) -> Unit,
     onModelChange: (String) -> Unit,
-    onSaveToAccount: () -> Unit,
     onTestConnection: () -> Unit
 ) {
     val uriHandler = LocalUriHandler.current
@@ -1250,35 +1333,37 @@ private fun AiConfigForm(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. AI 答题使用说明卡片
-        Surface(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-        ) {
-            Column(modifier = Modifier.padding(14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Outlined.Info,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
+        // 1. AI 答题使用说明卡片（由右上角圆圈图标控制展开与收起）
+        AnimatedVisibility(visible = showAiGuide) {
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.medium,
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+            ) {
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = AppStrings.aiGuideTitle(currentLang),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = AppStrings.aiGuideTitle(currentLang),
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                        text = AppStrings.aiGuideDesc(currentLang),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
+                        lineHeight = 18.sp
                     )
                 }
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = AppStrings.aiGuideDesc(currentLang),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
-                    lineHeight = 18.sp
-                )
             }
         }
 
@@ -1469,18 +1554,6 @@ private fun AiConfigForm(
         val buttonTextColor = when {
             isLlmSuccess || isLlmFailed -> Color.White
             else -> MaterialTheme.colorScheme.onTertiaryContainer
-        }
-
-        // 保存 API Key 到当前账号（换账号不共享，相同账号下次自动恢复）
-        OutlinedButton(
-            onClick = onSaveToAccount,
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            enabled = configLlmProvider.isNotBlank() && configLlmKey.isNotBlank()
-        ) {
-            Icon(Icons.Outlined.Save, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(AppStrings.saveApiKeyToAccount(currentLang), fontWeight = FontWeight.SemiBold)
         }
 
         Button(
