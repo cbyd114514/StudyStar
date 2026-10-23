@@ -156,7 +156,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val context = getApplication<Application>()
                 val data = context.configDataStore.data.first()
-                val userLlmConfig = data[getUserLlmKey(username)] ?: ""
+                val rawLlm = data[getUserLlmKey(username)] ?: ""
+                val userLlmConfig = CryptoSecurityHelper.decrypt(rawLlm)
                 val userCourseIds = data[getUserCourseIdsKey(username)] ?: ""
                 _studyState.value = _studyState.value.copy(
                     llmConfig = userLlmConfig.ifBlank { null },
@@ -173,7 +174,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
-     * 保存大模型配置到当前登录账号（实现 API Key 随账号绑定保存）
+     * 保存大模型配置到当前登录账号（硬件级 AES-256-GCM 加密存储，保障 API Key 绝密安全）
      */
     fun saveUserLlmConfig(llmConfig: String, logSuccess: Boolean = false) {
         val username = _loginState.value.username ?: _loginState.value.savedUsername ?: ""
@@ -182,17 +183,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             try {
                 val context = getApplication<Application>()
+                val encryptedLlm = CryptoSecurityHelper.encrypt(llmConfig)
                 context.configDataStore.edit { prefs ->
                     if (llmConfig.isNotBlank()) {
-                        prefs[getUserLlmKey(username)] = llmConfig
-                        prefs[LLM_CONFIG_KEY] = llmConfig
+                        prefs[getUserLlmKey(username)] = encryptedLlm
+                        prefs[LLM_CONFIG_KEY] = encryptedLlm
                     } else {
                         prefs.remove(getUserLlmKey(username))
                         prefs.remove(LLM_CONFIG_KEY)
                     }
                 }
                 if (logSuccess) {
-                    addLog("API Key 与大模型配置已保存至当前账号", LogType.SUCCESS)
+                    addLog("API Key 与大模型配置已加密保存至当前账号", LogType.SUCCESS)
                 }
             } catch (_: Exception) {}
         }
@@ -272,9 +274,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 // 账号独占隔离：如果存在保存的账号，优先加载该账号绑定的专属 API Key 与多选课程配置
-                val userLlmConfig = if (!savedUsername.isNullOrBlank()) {
+                val rawUserLlm = if (!savedUsername.isNullOrBlank()) {
                     data[getUserLlmKey(savedUsername)] ?: data[LLM_CONFIG_KEY]
-                } else null
+                } else data[LLM_CONFIG_KEY]
+                val userLlmConfig = CryptoSecurityHelper.decrypt(rawUserLlm)
                 val userCourseIds = if (!savedUsername.isNullOrBlank()) {
                     data[getUserCourseIdsKey(savedUsername)] ?: savedCourseIds
                 } else null
@@ -337,7 +340,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         prefs.remove(COURSE_IDS_KEY)
                     }
                     if (llmConfig != null) {
-                        prefs[LLM_CONFIG_KEY] = llmConfig
+                        prefs[LLM_CONFIG_KEY] = CryptoSecurityHelper.encrypt(llmConfig)
                     }
                 }
                 if (logSuccess) {

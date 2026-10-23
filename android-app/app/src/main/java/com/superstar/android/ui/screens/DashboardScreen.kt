@@ -8,6 +8,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -46,14 +48,15 @@ import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -134,10 +137,17 @@ fun DashboardScreen(
     var configLlmKey by remember { mutableStateOf("") }
     var configLlmModel by remember { mutableStateOf("") }
 
-    var showCourseList by remember { mutableStateOf(true) }
-    var showCourseTutorial by remember { mutableStateOf(false) }
+    var showCourseList by remember { mutableStateOf(false) }
+    var showCourseTutorialDialog by remember { mutableStateOf(false) }
     var showLlmSection by remember { mutableStateOf(false) }
-    var showAiGuide by remember { mutableStateOf(false) }
+    var showAiGuideDialog by remember { mutableStateOf(false) }
+
+    // 始终自动在后台获取学习通课程列表（进入控制台后自动静默拉取）
+    LaunchedEffect(loginState.isLoggedIn) {
+        if (loginState.isLoggedIn && courses.isEmpty() && !isLoadingCourses) {
+            viewModel.fetchCourses()
+        }
+    }
 
     // 从 studyState.llmConfig 同步（账号隔离：切换账号时若无配置则清空）
     LaunchedEffect(studyState.llmConfig) {
@@ -241,34 +251,6 @@ fun DashboardScreen(
                 )
             )
         },
-        floatingActionButton = {
-            if (studyState.isRunning) {
-                ExtendedFloatingActionButton(
-                    onClick = { viewModel.stopStudy() },
-                    icon = { Icon(Icons.Default.Pause, contentDescription = null) },
-                    text = { Text(AppStrings.stopStudyBtn(currentLang), fontWeight = FontWeight.Bold) },
-                    containerColor = MaterialTheme.colorScheme.error,
-                    contentColor = MaterialTheme.colorScheme.onError,
-                    shape = MaterialTheme.shapes.large
-                )
-            } else {
-                ExtendedFloatingActionButton(
-                    onClick = {
-                        viewModel.startStudy(
-                            courseIds = configCourseIds.ifBlank { null },
-                            speed = configSpeed.toDouble(),
-                            jobs = configJobs,
-                            llmConfig = buildLlmConfigJson()
-                        )
-                    },
-                    icon = { Icon(Icons.Default.PlayArrow, contentDescription = null) },
-                    text = { Text(AppStrings.startStudyBtn(currentLang), fontWeight = FontWeight.Bold) },
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary,
-                    shape = MaterialTheme.shapes.large
-                )
-            }
-        },
         containerColor = MaterialTheme.colorScheme.background
     ) { innerPadding ->
         LazyColumn(
@@ -278,7 +260,7 @@ fun DashboardScreen(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // --- 状态与任务点执行卡片 ---
+            // --- 状态与任务点执行卡片（操作按钮直接放置于状态卡片右侧） ---
             item(key = "status_card", contentType = "card") {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -293,7 +275,7 @@ fun DashboardScreen(
                             .fillMaxWidth()
                             .padding(18.dp)
                     ) {
-                        // 顶部状态指示栏
+                        // 顶部状态指示栏（右侧集成“开始刷课”/“停止刷课”操作按钮）
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically
@@ -325,6 +307,43 @@ fun DashboardScreen(
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
+                            }
+                            Spacer(modifier = Modifier.width(10.dp))
+                            if (studyState.isRunning) {
+                                Button(
+                                    onClick = { viewModel.stopStudy() },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.error,
+                                        contentColor = MaterialTheme.colorScheme.onError
+                                    ),
+                                    shape = MaterialTheme.shapes.medium,
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.Pause, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(AppStrings.stopStudyBtn(currentLang), fontWeight = FontWeight.Bold)
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        viewModel.startStudy(
+                                            courseIds = configCourseIds.ifBlank { null },
+                                            speed = configSpeed.toDouble(),
+                                            jobs = configJobs,
+                                            llmConfig = buildLlmConfigJson()
+                                        )
+                                    },
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = MaterialTheme.colorScheme.primary,
+                                        contentColor = MaterialTheme.colorScheme.onPrimary
+                                    ),
+                                    shape = MaterialTheme.shapes.medium,
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 8.dp)
+                                ) {
+                                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(AppStrings.startStudyBtn(currentLang), fontWeight = FontWeight.Bold)
+                                }
                             }
                         }
 
@@ -491,20 +510,44 @@ fun DashboardScreen(
 
                         Spacer(modifier = Modifier.height(16.dp))
 
-                        // 指定课程 ID（输入即自动保存）
-                        OutlinedTextField(
-                            value = configCourseIds,
-                            onValueChange = {
-                                configCourseIds = it
-                                viewModel.updateCourseSelection(it)
-                                autoSaveCoreConfig(courseIds = it)
-                            },
-                            label = { Text(AppStrings.customCourseIdLabel(currentLang)) },
-                            placeholder = { Text(AppStrings.customCourseIdPlaceholder(currentLang)) },
+                        // 已选课程概览（统一通过下方课程列表勾选选取，禁止随意手动填入错乱数据）
+                        val selectedCount = remember(configCourseIds) {
+                            configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.size
+                        }
+                        Surface(
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            shape = MaterialTheme.shapes.medium
-                        )
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.LibraryBooks,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (selectedCount > 0) AppStrings.selectedCoursesCount(currentLang, selectedCount) else AppStrings.noCourseSelected(currentLang),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = if (selectedCount > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    if (selectedCount > 0) {
+                                        Text(
+                                            text = "ID: $configCourseIds",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -553,6 +596,20 @@ fun DashboardScreen(
                                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                     )
                                 }
+                                Spacer(modifier = Modifier.width(4.dp))
+                            }
+
+                            // 学习通课程网址说明小图标按钮（点击弹出窗口）
+                            IconButton(
+                                onClick = { showCourseTutorialDialog = true },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Outlined.Info,
+                                    contentDescription = AppStrings.webVerifyTitle(currentLang),
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
                         }
 
@@ -580,49 +637,6 @@ fun DashboardScreen(
                                 Icon(Icons.Outlined.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(AppStrings.fetchCoursesBtn(currentLang))
-                            }
-                        }
-
-                        // 下方核对教程：改成“感叹号一个圈”，点击后再展开教程内容
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.medium)
-                                .clickable { showCourseTutorial = !showCourseTutorial },
-                            color = MaterialTheme.colorScheme.surfaceContainerLow
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Info,
-                                    contentDescription = AppStrings.webVerifyTitle(currentLang),
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.webVerifyTitle(currentLang),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Icon(
-                                    imageVector = if (showCourseTutorial) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-
-                        AnimatedVisibility(visible = showCourseTutorial) {
-                            Column {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                CourseWebVerificationBanner(currentLang = currentLang)
                             }
                         }
 
@@ -802,20 +816,15 @@ fun DashboardScreen(
                                     currentLang = currentLang
                                 )
 
-                                // 小角落里的使用说明圆圈图标按钮（冒号/问号加一个圈）
+                                // 小角落里的使用说明圆圈图标按钮（冒号/问号加一个圈，点击弹窗）
                                 IconButton(
-                                    onClick = {
-                                        showAiGuide = !showAiGuide
-                                        if (!showLlmSection && showAiGuide) {
-                                            showLlmSection = true
-                                        }
-                                    },
+                                    onClick = { showAiGuideDialog = true },
                                     modifier = Modifier.size(32.dp)
                                 ) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
                                         contentDescription = AppStrings.aiGuideTitle(currentLang),
-                                        tint = if (showAiGuide) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        tint = MaterialTheme.colorScheme.primary,
                                         modifier = Modifier.size(19.dp)
                                     )
                                 }
@@ -845,7 +854,6 @@ fun DashboardScreen(
                                 configLlmKey = configLlmKey,
                                 configLlmModel = configLlmModel,
                                 llmTestState = llmTestState,
-                                showAiGuide = showAiGuide,
                                 onProviderChange = { provider ->
                                     configLlmProvider = provider
                                     var endpoint = configLlmEndpoint
@@ -891,8 +899,135 @@ fun DashboardScreen(
             }
 
             item(key = "bottom_spacer", contentType = "spacer") {
-                Spacer(modifier = Modifier.height(84.dp))
+                Spacer(modifier = Modifier.height(24.dp))
             }
+        }
+
+        // 学习通课程网址核对说明弹窗
+        if (showCourseTutorialDialog) {
+            val uriHandler = LocalUriHandler.current
+            AlertDialog(
+                onDismissRequest = { showCourseTutorialDialog = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = {
+                    Text(
+                        text = AppStrings.webVerifyTitle(currentLang),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text(
+                            text = AppStrings.webVerifyDesc(currentLang),
+                            style = MaterialTheme.typography.bodyMedium,
+                            lineHeight = 20.sp
+                        )
+                        Surface(
+                            shape = MaterialTheme.shapes.small,
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh
+                        ) {
+                            Text(
+                                text = "https://mooc1-1.chaoxing.com/visit/interaction",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            uriHandler.openUri("https://mooc1-1.chaoxing.com/visit/interaction")
+                        }
+                    ) {
+                        Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(AppStrings.openWebBtn(currentLang))
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showCourseTutorialDialog = false }) {
+                        Text(AppStrings.closeBtn(currentLang))
+                    }
+                }
+            )
+        }
+
+        // AI 智能答题使用说明与快捷获取弹窗（包含详细教程与官方注册入口）
+        if (showAiGuideDialog) {
+            val uriHandler = LocalUriHandler.current
+            AlertDialog(
+                onDismissRequest = { showAiGuideDialog = false },
+                icon = {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                },
+                title = {
+                    Text(
+                        text = AppStrings.aiGuideTitle(currentLang),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(
+                            text = AppStrings.aiGuideDesc(currentLang),
+                            style = MaterialTheme.typography.bodySmall,
+                            lineHeight = 18.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = AppStrings.aiQuickUrls(currentLang),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedButton(
+                                onClick = { uriHandler.openUri("https://platform.deepseek.com/api_keys") },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(AppStrings.deepseekBtn(currentLang), fontSize = 11.sp)
+                            }
+                            OutlinedButton(
+                                onClick = { uriHandler.openUri("https://cloud.siliconflow.cn/account/ak") },
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(14.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(AppStrings.siliconFlowBtn(currentLang), fontSize = 11.sp)
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(onClick = { showAiGuideDialog = false }) {
+                        Text(AppStrings.closeBtn(currentLang))
+                    }
+                }
+            )
         }
     }
 }
@@ -1045,57 +1180,6 @@ private fun RunningProgressSection(
     )
 }
 
-/**
- * 学习通网页版核对横幅
- */
-@Composable
-private fun CourseWebVerificationBanner(currentLang: String) {
-    val uriHandler = LocalUriHandler.current
-    Surface(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.45f)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = AppStrings.webVerifyTitle(currentLang),
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = AppStrings.webVerifyDesc(currentLang),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.85f),
-                lineHeight = 16.sp
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { uriHandler.openUri("https://mooc1-1.chaoxing.com/visit/interaction") },
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(14.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(AppStrings.openWebBtn(currentLang), fontSize = 12.sp)
-            }
-        }
-    }
-}
 
 /**
  * LLM 连通状态微标
@@ -1317,14 +1401,12 @@ private fun AiConfigForm(
     configLlmKey: String,
     configLlmModel: String,
     llmTestState: MainViewModel.LlmTestState,
-    showAiGuide: Boolean,
     onProviderChange: (String) -> Unit,
     onEndpointChange: (String) -> Unit,
     onKeyChange: (String) -> Unit,
     onModelChange: (String) -> Unit,
     onTestConnection: () -> Unit
 ) {
-    val uriHandler = LocalUriHandler.current
     var isKeyVisible by remember { mutableStateOf(false) }
 
     Column(
@@ -1333,80 +1415,6 @@ private fun AiConfigForm(
             .padding(top = 16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 1. AI 答题使用说明卡片（由右上角圆圈图标控制展开与收起）
-        AnimatedVisibility(visible = showAiGuide) {
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium,
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Outlined.HelpOutline,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = AppStrings.aiGuideTitle(currentLang),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = AppStrings.aiGuideDesc(currentLang),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.9f),
-                        lineHeight = 18.sp
-                    )
-                }
-            }
-        }
-
-        // 2. 快捷获取 API Key 跳转按钮
-        Text(
-            text = AppStrings.aiQuickUrls(currentLang),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            OutlinedButton(
-                onClick = { uriHandler.openUri("https://platform.deepseek.com/api_keys") },
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(AppStrings.deepseekBtn(currentLang), fontSize = 12.sp)
-            }
-            OutlinedButton(
-                onClick = { uriHandler.openUri("https://cloud.siliconflow.cn/account/ak") },
-                modifier = Modifier.weight(1f),
-                shape = MaterialTheme.shapes.small
-            ) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(AppStrings.siliconFlowBtn(currentLang), fontSize = 12.sp)
-            }
-        }
-
         Text(
             text = AppStrings.selectProviderTip(currentLang),
             style = MaterialTheme.typography.bodySmall,
@@ -1417,9 +1425,15 @@ private fun AiConfigForm(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            listOf("DeepSeek", "SiliconFlow", "AI").forEach { provider ->
+            val otherLabel = AppStrings.otherAi(currentLang)
+            listOf("DeepSeek", "SiliconFlow", otherLabel).forEach { provider ->
+                val isSelected = if (provider == otherLabel) {
+                    configLlmProvider == otherLabel || configLlmProvider == "AI" || (configLlmProvider.isNotBlank() && configLlmProvider != "DeepSeek" && configLlmProvider != "SiliconFlow")
+                } else {
+                    configLlmProvider == provider
+                }
                 FilterChip(
-                    selected = configLlmProvider == provider,
+                    selected = isSelected,
                     onClick = { onProviderChange(provider) },
                     label = { Text(provider) },
                     colors = FilterChipDefaults.filterChipColors(

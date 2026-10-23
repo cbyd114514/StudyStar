@@ -165,13 +165,7 @@ fun SettingsScreen(
                                 )
                             }
                         }
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Text(
-                            text = AppStrings.projectCardDesc(currentLang),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
+                        Spacer(modifier = Modifier.height(14.dp))
                         FilledTonalButton(
                             onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
                             modifier = Modifier.fillMaxWidth(),

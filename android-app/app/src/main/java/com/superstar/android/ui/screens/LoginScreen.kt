@@ -58,6 +58,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -152,6 +153,53 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
+                // 顶部语言快速切换（登录前即可直接选择中文或英文）
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                    ) {
+                        Row(modifier = Modifier.padding(3.dp)) {
+                            val isZh = currentLang == "zh"
+                            Surface(
+                                shape = CircleShape,
+                                color = if (isZh) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { viewModel.setLanguage("zh") }
+                            ) {
+                                Text(
+                                    text = "中文",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (isZh) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (isZh) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                            Surface(
+                                shape = CircleShape,
+                                color = if (!isZh) MaterialTheme.colorScheme.primary else Color.Transparent,
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickable { viewModel.setLanguage("en") }
+                            ) {
+                                Text(
+                                    text = "EN",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = if (!isZh) FontWeight.Bold else FontWeight.Normal,
+                                    color = if (!isZh) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Logo 徽标

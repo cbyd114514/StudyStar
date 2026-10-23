@@ -195,8 +195,43 @@ object AppStrings {
         if (lang == "zh") "AI 智能答题使用说明" else "AI Quiz Solver Guide"
 
     fun aiGuideDesc(lang: String): String =
-        if (lang == "zh") "配置 AI 大模型可在刷课遇到视频穿插测试、章节测验与作业时，全自动调用大模型识别题目并填充提交高分答案。\n推荐使用 DeepSeek（题目理解力极强）或 硅基流动（免梯子，注册即赠送千万 Token）。"
-        else "AI auto-solver automatically answers in-video quizzes, chapter tests, and assignments with high accuracy.\nRecommended: DeepSeek or SiliconFlow."
+        if (lang == "zh") """一、功能简介：
+配置 AI 大模型后，在刷课遇到视频穿插测试、章节测验与课后作业时，系统全自动识别题目并调用大模型计算答案，自动提交作答。
+
+二、如何获取官方 API Key：
+1. DeepSeek 官方开放平台：
+网址：https://platform.deepseek.com
+注册登录后，进入「API Keys」页面创建密钥。DeepSeek 逻辑推理强，答题准确率高。
+
+2. 硅基流动 (SiliconFlow) 开放平台：
+网址：https://cloud.siliconflow.cn
+免翻墙，注册即赠送大量额度（相当于数千万 Token），足够刷完多门课程测验。在「API 密钥」中创建并复制。
+
+三、配置与安全保障：
+1. 选择预设提供商或自定义「其他AI」。
+2. 粘贴 API Key，系统会自动通过 Android Keystore 硬件级 AES-256-GCM 隔离加密存储，即便 Root 手机也无法提取明文，保障账号安全。
+3. 点击「测试大模型连通性」验证有效性，自动随当前账号保存。"""
+        else """1. Overview:
+AI auto-solver automatically answers in-video quizzes, chapter tests, and assignments with high accuracy using large language models.
+
+2. Official API Key Registration:
+- DeepSeek Portal: https://platform.deepseek.com (High accuracy)
+- SiliconFlow Portal: https://cloud.siliconflow.cn (Free tokens upon sign-up)
+
+3. Configuration & Security:
+Select provider, paste your API Key. The key is encrypted at rest using Android Keystore AES-256-GCM hardware protection. Test connectivity to verify."""
+
+    fun otherAi(lang: String): String =
+        if (lang == "zh") "其他AI" else "Other AI"
+
+    fun selectedCoursesCount(lang: String, count: Int): String =
+        if (lang == "zh") "已选课程: $count 门" else "Selected: $count course(s)"
+
+    fun noCourseSelected(lang: String): String =
+        if (lang == "zh") "未选择课程（请在下方课程列表中勾选）" else "No course selected (select below)"
+
+    fun closeBtn(lang: String): String =
+        if (lang == "zh") "关闭" else "Close"
 
     fun aiQuickUrls(lang: String): String =
         if (lang == "zh") "快捷获取 API Key 官方网址" else "Official API Key Registration"
