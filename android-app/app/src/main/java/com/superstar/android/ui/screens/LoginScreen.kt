@@ -1,5 +1,6 @@
 package com.superstar.android.ui.screens
 
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -48,6 +49,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -103,7 +105,10 @@ fun LoginScreen(
 
     val expandProgress by animateFloatAsState(
         targetValue = if (isExpandingToFullScreen) 1f else 0f,
-        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = 520,
+            easing = CubicBezierEasing(0.2f, 0.0f, 0.1f, 1.0f)
+        ),
         label = "login_expand_anim",
         finishedListener = { progress ->
             if (progress >= 1f) {
@@ -111,6 +116,12 @@ fun LoginScreen(
             }
         }
     )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            isExpandingToFullScreen = false
+        }
+    }
 
     // 从本地加载已保存的账号密码到输入框（方便用户查看与修改）
     val savedUsername = loginState.savedUsername
@@ -494,22 +505,22 @@ fun LoginScreen(
                 hypot(w, h) * 1.15f
             }
             val primaryColor = MaterialTheme.colorScheme.primary
-            val surfaceColor = MaterialTheme.colorScheme.surface
+            val destBgColor = MaterialTheme.colorScheme.background
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val center = if (buttonCenter != Offset.Zero) buttonCenter else this.center
                 val currentRadius = screenDiagonal * expandProgress
 
-                // 1. 水波主体平滑铺开
+                // 1. 水波主体平滑铺开（以目标控制台背景色平滑铺满，杜绝深蓝到浅色的跳变闪烁）
                 drawCircle(
-                    color = primaryColor,
+                    color = destBgColor,
                     radius = currentRadius,
                     center = center
                 )
 
                 // 2. 主水波边缘过渡光晕
                 drawCircle(
-                    color = surfaceColor.copy(alpha = (0.35f * (1f - expandProgress * 0.7f)).coerceIn(0f, 1f)),
+                    color = primaryColor.copy(alpha = (0.45f * (1f - expandProgress * 0.7f)).coerceIn(0f, 1f)),
                     radius = currentRadius,
                     center = center,
                     style = Stroke(width = 8.dp.toPx())
@@ -520,7 +531,7 @@ fun LoginScreen(
                 val wave1Alpha = ((1f - expandProgress) * 0.55f).coerceIn(0f, 1f)
                 if (wave1Alpha > 0.01f) {
                     drawCircle(
-                        color = surfaceColor.copy(alpha = wave1Alpha),
+                        color = primaryColor.copy(alpha = wave1Alpha),
                         radius = wave1Radius,
                         center = center,
                         style = Stroke(width = 5.dp.toPx())
@@ -532,7 +543,7 @@ fun LoginScreen(
                 val wave2Alpha = ((1f - expandProgress) * 0.35f).coerceIn(0f, 1f)
                 if (wave2Alpha > 0.01f) {
                     drawCircle(
-                        color = surfaceColor.copy(alpha = wave2Alpha),
+                        color = primaryColor.copy(alpha = wave2Alpha),
                         radius = wave2Radius,
                         center = center,
                         style = Stroke(width = 3.dp.toPx())
@@ -544,7 +555,7 @@ fun LoginScreen(
                 val wave3Alpha = ((1f - expandProgress) * 0.45f).coerceIn(0f, 1f)
                 if (wave3Alpha > 0.01f && wave3Radius > 0f) {
                     drawCircle(
-                        color = surfaceColor.copy(alpha = wave3Alpha),
+                        color = primaryColor.copy(alpha = wave3Alpha),
                         radius = wave3Radius,
                         center = center,
                         style = Stroke(width = 4.dp.toPx())

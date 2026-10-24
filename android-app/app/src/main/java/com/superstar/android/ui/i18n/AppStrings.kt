@@ -324,4 +324,166 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
 
     fun copiedToast(lang: String): String =
         if (lang == "zh") "日志已复制到剪贴板" else "Logs copied to clipboard"
+
+    /**
+     * 运行时日志与异常说明双语即时翻译器
+     * 在英文模式下，自动将 Python 端与 ViewModel 的中文日志转化为专业地道的英文
+     */
+    fun translateLog(rawMessage: String, lang: String): String {
+        if (lang == "zh") return rawMessage
+        var msg = rawMessage
+
+        // 1. 中括号标签翻译
+        msg = msg.replace("[作业]", "[Quiz]")
+            .replace("[视频]", "[Video]")
+            .replace("[阅读]", "[Reading]")
+            .replace("[讨论]", "[Discussion]")
+            .replace("[空页面]", "[Page]")
+            .replace("[Cookie]", "[Cookie]")
+            .replace("[登录]", "[Login]")
+            .replace("[并行]", "[Parallel]")
+            .replace("[配置]", "[Config]")
+            .replace("[错误]", "[Error]")
+            .replace("[警告]", "[Warning]")
+            .replace("[提示]", "[Tip]")
+            .replace("[其他任务]", "[Task]")
+            .replace("[AI]", "[AI]")
+            .replace("[SiliconFlow]", "[SiliconFlow]")
+            .replace("[系统]", "[System]")
+            .replace("[解析]", "[Parser]")
+
+        // 2. 作业与测验相关语句
+        msg = msg.replace(Regex("""测验成绩:\s*([0-9.]+)\s*分，已达到及格线\(60分\)"""), "Quiz score: $1 pts, passed passing score (60 pts)")
+        msg = msg.replace(Regex("""测验成绩:\s*([0-9.]+)\s*分，未达及格线\(60分\)，正在自动重做并重新提交\.\.\."""), "Quiz score: $1 pts, below passing score (60 pts), automatically retaking and resubmitting...")
+        msg = msg.replace("测验成绩:", "Quiz score:")
+        msg = msg.replace("分，已达到及格线(60分)", " pts, passed passing score (60 pts)")
+        msg = msg.replace("分，未达及格线(60分)", " pts, below passing score (60 pts)")
+        msg = msg.replace("正在自动重做并重新提交...", "automatically retaking and resubmitting...")
+        msg = msg.replace("正在自动重做并重新提交", "automatically retaking and resubmitting")
+        msg = msg.replace("重做作答完成，重新提交答案...", "Retake completed, resubmitting answers...")
+        msg = msg.replace("不及格重做已达到最大轮次(4轮)，继续后续任务", "Reached max retake rounds (4 rounds), continuing next task")
+        msg = msg.replace("该测验不支持重做或重做接口不可用", "Quiz does not support retake or retake API unavailable")
+        msg = msg.replace("正在提交答案至", "Submitting answers to")
+        msg = msg.replace("提交答题成功", "Quiz submitted successfully")
+        msg = msg.replace("提交答题失败", "Quiz submission failed")
+        msg = msg.replace("已通过大模型作答完成", "Answered via LLM")
+        msg = msg.replace("未配置大模型或作答失败，随机选择保底", "LLM not configured or failed, fallback to random choice")
+        msg = msg.replace("正在解析题目...", "Parsing quiz questions...")
+        msg = msg.replace("成功解析题目，准备作答...", "Questions parsed successfully, preparing to answer...")
+        msg = msg.replace("未获取到题目", "No quiz questions available")
+        msg = msg.replace("教师未创建完成该测验", "Instructor has not published this quiz")
+        msg = msg.replace("测验题目参数已更新或未到开放作答时间，已自动记录并继续后续学习", "Quiz parameters updated or not yet open; automatically recorded and proceeding")
+
+        // 3. 视频播放相关语句
+        msg = msg.replace("开始播放:", "Start playing:")
+        msg = msg.replace("开始播放", "Start playing")
+        msg = msg.replace("播放完成:", "Playback completed:")
+        msg = msg.replace("播放完成", "Playback completed")
+        msg = msg.replace("视频播放进度:", "Video progress:")
+        msg = msg.replace("正在跳过", "Skipping")
+
+        // 4. 讨论与阅读
+        msg = msg.replace("自动参与讨论成功", "Participated in discussion successfully")
+        msg = msg.replace("自动参与讨论容错:", "Discussion fallback:")
+        msg = msg.replace("讨论已发表", "Discussion posted")
+
+        // 5. 章节与并发执行
+        msg = msg.replace("线程处理章节:", "Thread processing chapter:")
+        msg = msg.replace("章节完成:", "Chapter completed:")
+        msg = msg.replace("重试章节", "Retrying chapter")
+        msg = msg.replace("未知章节状态:", "Unknown chapter status:")
+        msg = msg.replace("章节未开放已达最大重试次数:", "Chapter not open, reached max retries:")
+        msg = msg.replace("章节处理失败已达最大重试次数:", "Chapter failed, reached max retries:")
+        msg = msg.replace("章节未开放", "Chapter not open")
+
+        // 6. 课程与刷课总任务
+        msg = msg.replace("===== 开始刷课任务 =====", "===== Starting study tasks =====")
+        msg = msg.replace("===== 刷课任务完成 =====", "===== All study tasks completed =====")
+        msg = msg.replace("刷课任务全部完成!", "All study tasks finished successfully!")
+        msg = msg.replace("刷课任务已启动", "Study task started")
+        msg = msg.replace("刷课任务已停止", "Study task stopped")
+        msg = msg.replace("刷课任务被用户停止", "Study task stopped by user")
+        msg = msg.replace("刷课任务未完成或异常:", "Study task not finished or exception:")
+        msg = msg.replace("课程学习完成:", "Course completed:")
+        msg = msg.replace("开始学习课程:", "Starting course:")
+        msg = msg.replace("正在获取课程列表...", "Fetching course list...")
+        msg = msg.replace("获取课程列表失败", "Failed to fetch course list")
+        msg = msg.replace(Regex("""获取到\s*(\d+)\s*门课程"""), "Fetched $1 courses")
+        msg = msg.replace(Regex("""已按多选配置筛选出\s*(\d+)\s*门待学课程"""), "Filtered $1 courses to study by selection")
+        msg = msg.replace("未勾选任何课程，已取消默认全选刷课模式。请在课程列表中勾选课程后重试", "No courses selected. Please select courses in the list and retry.")
+        msg = msg.replace("勾选的课程 ID 在当前账号课程列表中未匹配到，请重新勾选", "Selected course IDs not matched in course list, please select again")
+        msg = msg.replace("使用已获取的课程列表，避免重复请求", "Using cached course list to avoid repeated requests")
+        msg = msg.replace("请在课程列表中勾选需要学习的课程（支持多选）", "Please select courses from the list (multi-selection supported)")
+        msg = msg.replace("未检测到可选课程，请检查课程是否已结课或已全部完成", "No courses found; please check if courses have ended or are already completed")
+        msg = msg.replace("当前章节所有可处理任务点已顺利完成", "All available task points in current chapter completed smoothly")
+
+        // 7. 登录与会话凭据
+        msg = msg.replace("正在检查已保存的登录状态...", "Checking saved login status...")
+        msg = msg.replace(Regex("""已加载\s*(\d+)\s*个 cookies"""), "Loaded $1 cookies")
+        msg = msg.replace("关键凭据状态:", "Key credentials status:")
+        msg = msg.replace("未找到已保存的登录状态", "No saved login status found")
+        msg = msg.replace("===== 尝试使用已保存的登录状态 =====", "===== Trying saved login status =====")
+        msg = msg.replace("===== 登录状态有效，跳过密码登录 =====", "===== Login status valid, skipping password login =====")
+        msg = msg.replace("===== 登录状态已失效，尝试使用账号密码重新登录 =====", "===== Login status expired, retrying login with credentials =====")
+        msg = msg.replace("正在使用账号密码登录:", "Logging in with credentials:")
+        msg = msg.replace("登录成功", "Login successful")
+        msg = msg.replace("登录失败:", "Login failed:")
+        msg = msg.replace("登录失败，无法开始刷课", "Login failed, unable to start study")
+        msg = msg.replace("登录失败，无法获取课程列表", "Login failed, unable to fetch courses")
+        msg = msg.replace("已退出登录", "Logged out")
+        msg = msg.replace("请先登录", "Please log in first")
+        msg = msg.replace("学习通账号登录失效，请在登录页面检查手机号与密码", "Login session expired or invalid credentials; please check your phone/student ID and password")
+        msg = msg.replace(Regex("""已安全持久化\s*(\d+)\s*项会话凭据"""), "Safely persisted $1 session credentials")
+        msg = msg.replace(Regex("""已安全载入\s*(\d+)\s*项专属会话凭据"""), "Safely loaded $1 session credentials")
+        msg = msg.replace("已清除本地会话缓存", "Cleared local session cache")
+        msg = msg.replace("保存会话凭据失败:", "Failed to save session credentials:")
+        msg = msg.replace("载入会话凭据失败:", "Failed to load session credentials:")
+        msg = msg.replace("清除会话缓存失败:", "Failed to clear session cache:")
+        msg = msg.replace("已加载保存的账号:", "Loaded saved account:")
+
+        // 8. 大模型与参数配置
+        msg = msg.replace("大模型初始化成功:", "LLM initialized successfully:")
+        msg = msg.replace("大模型初始化失败:", "LLM initialization failed:")
+        msg = msg.replace("大模型初始化异常:", "LLM initialization exception:")
+        msg = msg.replace("大模型答题已配置", "LLM quiz solver configured")
+        msg = msg.replace("大模型连接测试成功", "LLM connection test succeeded")
+        msg = msg.replace("大模型连接测试失败", "LLM connection test failed")
+        msg = msg.replace("已恢复此账号关联的 API Key 大模型配置", "Restored LLM API Key config for this account")
+        msg = msg.replace("已恢复此账号历史勾选的课程", "Restored selected courses for this account")
+        msg = msg.replace("API Key 与大模型配置已加密保存至当前账号", "API Key and LLM config safely encrypted and saved to account")
+        msg = msg.replace("配置已保存:", "Configuration saved:")
+        msg = msg.replace("已加载保存的配置:", "Loaded saved configuration:")
+        msg = msg.replace("速度=", "Speed=")
+        msg = msg.replace("并发=", "Concurrency=")
+        msg = msg.replace("收到大模型配置:", "Received LLM configuration:")
+        msg = msg.replace("使用大模型配置:", "Using LLM configuration:")
+        msg = msg.replace("收到已获取的课程列表:", "Received cached course list:")
+        msg = msg.replace("使用已获取的课程列表", "Using cached course list")
+        msg = msg.replace("Python 运行环境就绪:", "Python runtime ready:")
+        msg = msg.replace("Python 环境初始化提示:", "Python environment notice:")
+        msg = msg.replace("环境检测通过", "Environment check passed")
+        msg = msg.replace("环境检测失败:", "Environment check failed:")
+        msg = msg.replace("正在请求", "Requesting")
+        msg = msg.replace("获取到答案:", "Answer received:")
+        msg = msg.replace("API请求失败:", "API request failed:")
+        msg = msg.replace("请求异常:", "Request exception:")
+        msg = msg.replace("请求失败:", "Request failed:")
+        msg = msg.replace("已达最大重试次数", "Reached max retries")
+        msg = msg.replace("无法解析大模型输出内容:", "Cannot parse LLM response:")
+
+        // 9. 异常与网络容错
+        msg = msg.replace("学习通服务器访问受限，请稍候几分钟再试或切换手机网络", "Server access temporarily restricted; please wait a few minutes or switch network")
+        msg = msg.replace("网络连接中断，请检查手机 Wi-Fi 或移动数据网络", "Network disconnected; please check your Wi-Fi or mobile data")
+        msg = msg.replace("网络请求超时，系统正在自动重试", "Network request timed out; automatically retrying")
+        msg = msg.replace("学习通服务器返回数据格式异常，已自动跳过并继续", "Server response format abnormal; automatically skipped and continuing")
+        msg = msg.replace("已有刷课任务在后台运行中，无需重复开启", "A study task is already running in background")
+        msg = msg.replace("任务遇到微小网络波动，系统正在自动容错处理", "Minor network glitch detected; automatically handling error")
+        msg = msg.replace("刷课任务已在运行中", "Study task is already running")
+        msg = msg.replace("刷课任务异常:", "Study task exception:")
+        msg = msg.replace("完整堆栈:", "Full stack trace:")
+        msg = msg.replace("解析课程列表失败:", "Failed to parse course list:")
+        msg = msg.replace("加载配置失败:", "Failed to load config:")
+
+        return msg
+    }
 }

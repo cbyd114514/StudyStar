@@ -177,7 +177,12 @@ fun SuperStarApp(
             targetState = currentPage,
             modifier = Modifier.fillMaxSize(),
             transitionSpec = {
-                fadeIn(tween(350)) togetherWith fadeOut(tween(350))
+                if (targetState == MainViewModel.Page.MAIN) {
+                    // 进入控制台：登录页水波已平滑铺展至全屏，控制台平滑淡入，消除突兀跳变与闪烁
+                    fadeIn(tween(280, easing = FastOutSlowInEasing)) togetherWith fadeOut(tween(160))
+                } else {
+                    fadeIn(tween(240)) togetherWith fadeOut(tween(180))
+                }
             },
             label = "page_transition"
         ) { page ->
@@ -383,7 +388,13 @@ private fun MainScreen(
     AnimatedContent(
         targetState = showSettings,
         transitionSpec = {
-            fadeIn(tween(250)) togetherWith fadeOut(tween(250))
+            if (targetState) {
+                // 进入设置页：Dashboard 齿轮水波已平滑铺满全屏，SettingsScreen 平滑淡入，完全消除闪烁
+                fadeIn(tween(280, easing = FastOutSlowInEasing)) togetherWith fadeOut(tween(160))
+            } else {
+                // 返回控制台：平滑交叉淡化
+                fadeIn(tween(240)) togetherWith fadeOut(tween(180))
+            }
         },
         label = "main_settings_transition"
     ) { inSettings ->

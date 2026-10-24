@@ -101,11 +101,10 @@ fun SettingsScreen(
     val isZh = currentLang == "zh"
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
-    var autoScrollEnabled by remember { mutableStateOf(true) }
     var isLogsExpanded by remember { mutableStateOf(true) }
 
-    LaunchedEffect(logs.size, autoScrollEnabled) {
-        if (logs.isNotEmpty() && autoScrollEnabled && !listState.isScrollInProgress) {
+    LaunchedEffect(logs.size) {
+        if (logs.isNotEmpty() && !listState.isScrollInProgress) {
             listState.scrollToItem(logs.size - 1)
         }
     }
@@ -318,14 +317,17 @@ fun SettingsScreen(
                             Column {
                                 Spacer(modifier = Modifier.height(10.dp))
 
-                                // 操作按钮栏：复制全部日志 / 清空 / 自动滚动开关
+                                // 操作按钮栏：复制全部日志 / 清空
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     OutlinedButton(
                                         onClick = {
-                                            val fullLog = logs.joinToString("\n") { "[${it.timestamp}] ${it.message}" }
+                                            val fullLog = logs.joinToString("\n") {
+                                                val translated = AppStrings.translateLog(it.message, currentLang)
+                                                "[${it.timestamp}] $translated"
+                                            }
                                             clipboardManager.setText(AnnotatedString(fullLog))
                                             Toast.makeText(context, if (isZh) "已复制全部日志" else "Logs copied", Toast.LENGTH_SHORT).show()
                                         },
@@ -333,7 +335,7 @@ fun SettingsScreen(
                                         shape = MaterialTheme.shapes.small
                                     ) {
                                         Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(if (isZh) "复制" else "Copy", fontSize = 12.sp)
                                     }
 
@@ -343,16 +345,9 @@ fun SettingsScreen(
                                         shape = MaterialTheme.shapes.small
                                     ) {
                                         Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Spacer(modifier = Modifier.width(6.dp))
                                         Text(if (isZh) "清空" else "Clear", fontSize = 12.sp)
                                     }
-
-                                    FilterChip(
-                                        selected = autoScrollEnabled,
-                                        onClick = { autoScrollEnabled = !autoScrollEnabled },
-                                        label = { Text(if (autoScrollEnabled) (if (isZh) "跟进" else "Follow") else (if (isZh) "暂停" else "Pause"), fontSize = 12.sp) },
-                                        shape = MaterialTheme.shapes.small
-                                    )
                                 }
 
                                 Spacer(modifier = Modifier.height(12.dp))
@@ -390,7 +385,7 @@ fun SettingsScreen(
                                                 key = { it.id },
                                                 contentType = { "log_item" }
                                             ) { log ->
-                                                LogItemView(log = log)
+                                                LogItemView(log = log, currentLang = currentLang)
                                             }
                                         }
                                     }
@@ -468,7 +463,7 @@ fun SettingsScreen(
 }
 
 @Composable
-private fun LogItemView(log: MainViewModel.LogEntry) {
+private fun LogItemView(log: MainViewModel.LogEntry, currentLang: String) {
     val (typeColor, typeText) = when (log.type) {
         MainViewModel.LogType.INFO -> StatusInfo to "INFO"
         MainViewModel.LogType.SUCCESS -> StatusSuccess to "SUCC"
@@ -507,8 +502,10 @@ private fun LogItemView(log: MainViewModel.LogEntry) {
             Spacer(modifier = Modifier.width(6.dp))
         }
 
+        val displayMessage = AppStrings.translateLog(log.message, currentLang)
+
         Text(
-            text = log.message,
+            text = displayMessage,
             color = MaterialTheme.colorScheme.onSurface,
             fontSize = 12.sp,
             fontFamily = FontFamily.Monospace,

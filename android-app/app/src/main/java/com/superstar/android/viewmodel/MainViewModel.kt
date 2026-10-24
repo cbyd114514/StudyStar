@@ -410,7 +410,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             NotificationHelper.notifyError(
                                 getApplication(),
                                 "学习星 登录失败",
-                                displayError
+                                displayError,
+                                _currentLanguage.value
                             )
                         }
                     }
@@ -445,7 +446,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 NotificationHelper.notifyError(
                     getApplication(),
                     "学习星 选课提示",
-                    warnMsg
+                    warnMsg,
+                    _currentLanguage.value
                 )
                 return@launch
             }
@@ -532,7 +534,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         NotificationHelper.notifyError(
                             getApplication(),
                             "学习星 刷课异常提醒",
-                            errorTip
+                            errorTip,
+                            _currentLanguage.value
                         )
                     }
                 }
@@ -667,7 +670,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
         // 维护最近问题与提醒列表（给用户清晰提示，无底层技术错误码）
         if (actualType == LogType.ERROR || actualType == LogType.WARNING) {
-            val humanizedMsg = NotificationHelper.humanize(safeMsg)
+            val humanizedMsg = NotificationHelper.humanize(safeMsg, _currentLanguage.value)
             val issueEntry = newEntry.copy(message = humanizedMsg)
             val currentIssues = _recentIssues.value.toMutableList()
             if (currentIssues.none { it.message == humanizedMsg }) {
@@ -687,7 +690,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 NotificationHelper.notifyError(
                     getApplication(),
                     "学习星 任务提醒",
-                    safeMsg
+                    safeMsg,
+                    _currentLanguage.value
                 )
             }
         }

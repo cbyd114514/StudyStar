@@ -1,6 +1,7 @@
 package com.superstar.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -81,6 +82,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -161,15 +163,23 @@ fun DashboardScreen(
 
     val settingsRippleProgress by animateFloatAsState(
         targetValue = if (isSettingsOpening) 1f else 0f,
-        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = 520,
+            easing = CubicBezierEasing(0.2f, 0.0f, 0.1f, 1.0f)
+        ),
         label = "settings_ripple_anim",
         finishedListener = { progress ->
             if (progress >= 1f) {
-                isSettingsOpening = false
                 onOpenSettings()
             }
         }
     )
+
+    DisposableEffect(Unit) {
+        onDispose {
+            isSettingsOpening = false
+        }
+    }
 
     // 始终自动在后台获取学习通课程列表（进入控制台后自动静默拉取）
     LaunchedEffect(loginState.isLoggedIn) {
@@ -479,7 +489,7 @@ fun DashboardScreen(
                                             )
                                             Spacer(modifier = Modifier.width(8.dp))
                                             Text(
-                                                text = issue.message,
+                                                text = AppStrings.translateLog(issue.message, currentLang),
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurface,
                                                 modifier = Modifier.weight(1f)
@@ -1102,15 +1112,15 @@ fun DashboardScreen(
                 hypot(w, h)
             }
             val primaryColor = MaterialTheme.colorScheme.primary
-            val surfaceColor = MaterialTheme.colorScheme.surface
+            val destBgColor = MaterialTheme.colorScheme.background
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val center = if (gearCenter != Offset.Zero) gearCenter else Offset(size.width - 48.dp.toPx(), 48.dp.toPx())
                 val currentRadius = screenDiagonal * settingsRippleProgress
 
-                // 1. 水波主体平滑铺满全屏
+                // 1. 水波主体平滑铺满全屏（与设置页背景完全一致，消除视觉断层与闪烁）
                 drawCircle(
-                    color = surfaceColor,
+                    color = destBgColor,
                     radius = currentRadius,
                     center = center
                 )
