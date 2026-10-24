@@ -1,11 +1,17 @@
 package com.superstar.android.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.rememberScrollState
@@ -87,15 +93,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.hypot
 import com.superstar.android.ui.i18n.AppStrings
 import com.superstar.android.ui.theme.StatusSuccess
 import com.superstar.android.viewmodel.CourseInfo
@@ -141,6 +154,22 @@ fun DashboardScreen(
     var showCourseTutorialDialog by remember { mutableStateOf(false) }
     var showLlmSection by remember { mutableStateOf(false) }
     var showAiGuideDialog by remember { mutableStateOf(false) }
+
+    // 设置齿轮水波形铺开动画状态与坐标
+    var gearCenter by remember { mutableStateOf(Offset.Zero) }
+    var isSettingsOpening by remember { mutableStateOf(false) }
+
+    val settingsRippleProgress by animateFloatAsState(
+        targetValue = if (isSettingsOpening) 1f else 0f,
+        animationSpec = tween(durationMillis = 380, easing = FastOutSlowInEasing),
+        label = "settings_ripple_anim",
+        finishedListener = { progress ->
+            if (progress >= 1f) {
+                isSettingsOpening = false
+                onOpenSettings()
+            }
+        }
+    )
 
     // 始终自动在后台获取学习通课程列表（进入控制台后自动静默拉取）
     LaunchedEffect(loginState.isLoggedIn) {
@@ -217,42 +246,53 @@ fun DashboardScreen(
         )
     }
 
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = AppStrings.dashboardTitle(currentLang),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${AppStrings.accountPrefix(currentLang)}${loginState.username ?: AppStrings.loggedIn(currentLang)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(
-                            imageVector = Icons.Outlined.Settings,
-                            contentDescription = AppStrings.settingsTooltip(currentLang),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text(
+                                text = AppStrings.dashboardTitle(currentLang),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "${AppStrings.accountPrefix(currentLang)}${loginState.username ?: AppStrings.loggedIn(currentLang)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = {
+                                if (!isSettingsOpening) {
+                                    isSettingsOpening = true
+                                }
+                            },
+                            modifier = Modifier.onGloballyPositioned { coordinates ->
+                                val bounds = coordinates.boundsInRoot()
+                                gearCenter = bounds.center
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Settings,
+                                contentDescription = AppStrings.settingsTooltip(currentLang),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    },
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
+                    )
                 )
-            )
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) { innerPadding ->
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -363,9 +403,17 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 运行问题与重点提醒卡片：仅在出现异常问题时弹出来，运行正常时不显示 ---
-            if (recentIssues.isNotEmpty()) {
-                item(key = "issues_card", contentType = "card") {
+            // --- 运行问题与重点提醒卡片：仅在出现异常问题时弹出来，展开/收起均带流畅动画 ---
+            item(key = "issues_card_container") {
+                AnimatedVisibility(
+                    visible = recentIssues.isNotEmpty(),
+                    enter = expandVertically(
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeIn(animationSpec = tween(220)),
+                    exit = shrinkVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeOut(animationSpec = tween(180))
+                ) {
                     ElevatedCard(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
@@ -674,93 +722,102 @@ fun DashboardScreen(
                 }
             }
 
-            // --- 虚拟化高性能课程列表项（支持多选与一键全选/清空，选后立即默认保存参数） ---
-            if (showCourseList && courses.isNotEmpty()) {
-                item(key = "course_multi_actions", contentType = "card") {
-                    val selectedCount = remember(configCourseIds) {
-                        configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.size
-                    }
-                    Surface(
+            // --- 虚拟化高性能课程列表项（带自然平滑展开/收起动画） ---
+            item(key = "course_list_collapsible") {
+                AnimatedVisibility(
+                    visible = showCourseList && courses.isNotEmpty(),
+                    enter = expandVertically(
+                        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeIn(animationSpec = tween(220)),
+                    exit = shrinkVertically(
+                        animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                    ) + fadeOut(animationSpec = tween(180))
+                ) {
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
+                        val selectedCount = remember(configCourseIds) {
+                            configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.size
+                        }
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium,
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f)
+                        ) {
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = AppStrings.selectedCoursesSummary(currentLang, selectedCount, courses.size),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    OutlinedButton(
+                                        onClick = {
+                                            val allIds = courses.joinToString(",") { it.courseId }
+                                            configCourseIds = allIds
+                                            viewModel.updateCourseSelection(allIds)
+                                            autoSaveCoreConfig(courseIds = allIds)
+                                        },
+                                        shape = MaterialTheme.shapes.small,
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text(AppStrings.selectAllCourses(currentLang), fontSize = 12.sp)
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    OutlinedButton(
+                                        onClick = {
+                                            configCourseIds = ""
+                                            viewModel.updateCourseSelection("")
+                                            autoSaveCoreConfig(courseIds = "")
+                                        },
+                                        shape = MaterialTheme.shapes.small,
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.height(32.dp)
+                                    ) {
+                                        Text(AppStrings.clearSelectedCourses(currentLang), fontSize = 12.sp)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = AppStrings.selectedCoursesSummary(currentLang, selectedCount, courses.size),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
+                                    text = AppStrings.multiSelectTip(currentLang),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                                OutlinedButton(
-                                    onClick = {
-                                        val allIds = courses.joinToString(",") { it.courseId }
-                                        configCourseIds = allIds
-                                        viewModel.updateCourseSelection(allIds)
-                                        autoSaveCoreConfig(courseIds = allIds)
-                                    },
-                                    shape = MaterialTheme.shapes.small,
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text(AppStrings.selectAllCourses(currentLang), fontSize = 12.sp)
-                                }
-                                Spacer(modifier = Modifier.width(6.dp))
-                                OutlinedButton(
-                                    onClick = {
-                                        configCourseIds = ""
-                                        viewModel.updateCourseSelection("")
-                                        autoSaveCoreConfig(courseIds = "")
-                                    },
-                                    shape = MaterialTheme.shapes.small,
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
-                                    modifier = Modifier.height(32.dp)
-                                ) {
-                                    Text(AppStrings.clearSelectedCourses(currentLang), fontSize = 12.sp)
-                                }
                             }
-                            Spacer(modifier = Modifier.height(4.dp))
-                            Text(
-                                text = AppStrings.multiSelectTip(currentLang),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        }
+
+                        courses.forEach { course ->
+                            val isSelected = remember(configCourseIds, course.courseId) {
+                                val ids = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                                ids.contains(course.courseId)
+                            }
+                            CourseItemCard(
+                                course = course,
+                                isSelected = isSelected,
+                                selectLabel = AppStrings.selectCourse(currentLang),
+                                selectedLabel = AppStrings.selectedCourse(currentLang),
+                                onSelect = {
+                                    val currentIds = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
+                                    if (currentIds.contains(course.courseId)) {
+                                        currentIds.remove(course.courseId)
+                                    } else {
+                                        currentIds.add(course.courseId)
+                                    }
+                                    val newCourseIds = currentIds.joinToString(",")
+                                    configCourseIds = newCourseIds
+                                    viewModel.updateCourseSelection(newCourseIds)
+                                    autoSaveCoreConfig(courseIds = newCourseIds)
+                                }
                             )
                         }
                     }
-                }
-
-                items(
-                    items = courses,
-                    key = { it.courseId },
-                    contentType = { "course_item" }
-                ) { course ->
-                    val isSelected = remember(configCourseIds, course.courseId) {
-                        val ids = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }
-                        ids.contains(course.courseId)
-                    }
-                    CourseItemCard(
-                        course = course,
-                        isSelected = isSelected,
-                        selectLabel = AppStrings.selectCourse(currentLang),
-                        selectedLabel = AppStrings.selectedCourse(currentLang),
-                        onSelect = {
-                            val currentIds = configCourseIds.split(",").map { it.trim() }.filter { it.isNotEmpty() }.toMutableList()
-                            if (currentIds.contains(course.courseId)) {
-                                currentIds.remove(course.courseId)
-                            } else {
-                                currentIds.add(course.courseId)
-                            }
-                            val newCourseIds = currentIds.joinToString(",")
-                            configCourseIds = newCourseIds
-                            viewModel.updateCourseSelection(newCourseIds)
-                            autoSaveCoreConfig(courseIds = newCourseIds)
-                        }
-                    )
                 }
             }
 
@@ -844,8 +901,12 @@ fun DashboardScreen(
 
                         AnimatedVisibility(
                             visible = showLlmSection,
-                            enter = fadeIn(animationSpec = tween(120)),
-                            exit = fadeOut(animationSpec = tween(120))
+                            enter = expandVertically(
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                            ) + fadeIn(animationSpec = tween(220)),
+                            exit = shrinkVertically(
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                            ) + fadeOut(animationSpec = tween(180))
                         ) {
                             AiConfigForm(
                                 currentLang = currentLang,
@@ -1028,6 +1089,76 @@ fun DashboardScreen(
                     }
                 }
             )
+        }
+    }
+
+    // --- 从设置齿轮图标展开到全屏的水波形铺开动画 ---
+        if (settingsRippleProgress > 0f) {
+            val configuration = LocalConfiguration.current
+            val density = LocalDensity.current
+            val screenDiagonal = with(density) {
+                val w = configuration.screenWidthDp.dp.toPx()
+                val h = configuration.screenHeightDp.dp.toPx()
+                hypot(w, h)
+            }
+            val primaryColor = MaterialTheme.colorScheme.primary
+            val surfaceColor = MaterialTheme.colorScheme.surface
+
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val center = if (gearCenter != Offset.Zero) gearCenter else Offset(size.width - 48.dp.toPx(), 48.dp.toPx())
+                val currentRadius = screenDiagonal * settingsRippleProgress
+
+                // 1. 水波主体平滑铺满全屏
+                drawCircle(
+                    color = surfaceColor,
+                    radius = currentRadius,
+                    center = center
+                )
+
+                // 2. 主水波边缘过渡光晕
+                drawCircle(
+                    color = primaryColor.copy(alpha = (0.28f * (1f - settingsRippleProgress * 0.7f)).coerceIn(0f, 1f)),
+                    radius = currentRadius,
+                    center = center,
+                    style = Stroke(width = 8.dp.toPx())
+                )
+
+                // 3. 第一道同心水波涟漪环（前置动态水波）
+                val wave1Radius = currentRadius * 1.12f + 16.dp.toPx()
+                val wave1Alpha = ((1f - settingsRippleProgress) * 0.5f).coerceIn(0f, 1f)
+                if (wave1Alpha > 0.01f) {
+                    drawCircle(
+                        color = primaryColor.copy(alpha = wave1Alpha),
+                        radius = wave1Radius,
+                        center = center,
+                        style = Stroke(width = 5.dp.toPx())
+                    )
+                }
+
+                // 4. 第二道同心水波涟漪环（更外层柔和波纹）
+                val wave2Radius = currentRadius * 1.25f + 32.dp.toPx()
+                val wave2Alpha = ((1f - settingsRippleProgress) * 0.32f).coerceIn(0f, 1f)
+                if (wave2Alpha > 0.01f) {
+                    drawCircle(
+                        color = primaryColor.copy(alpha = wave2Alpha),
+                        radius = wave2Radius,
+                        center = center,
+                        style = Stroke(width = 3.dp.toPx())
+                    )
+                }
+
+                // 5. 第三道同心水波内环（紧随其后的内圈涟漪）
+                val wave3Radius = (currentRadius * 0.85f).coerceAtLeast(0f)
+                val wave3Alpha = ((1f - settingsRippleProgress) * 0.4f).coerceIn(0f, 1f)
+                if (wave3Alpha > 0.01f && wave3Radius > 0f) {
+                    drawCircle(
+                        color = primaryColor.copy(alpha = wave3Alpha),
+                        radius = wave3Radius,
+                        center = center,
+                        style = Stroke(width = 4.dp.toPx())
+                    )
+                }
+            }
         }
     }
 }

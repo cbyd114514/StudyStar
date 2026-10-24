@@ -1,7 +1,16 @@
 package com.superstar.android.ui.screens
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -22,6 +31,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteSweep
@@ -91,6 +102,7 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
     var autoScrollEnabled by remember { mutableStateOf(true) }
+    var isLogsExpanded by remember { mutableStateOf(true) }
 
     LaunchedEffect(logs.size, autoScrollEnabled) {
         if (logs.isNotEmpty() && autoScrollEnabled && !listState.isScrollInProgress) {
@@ -252,7 +264,9 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isLogsExpanded = !isLogsExpanded },
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
@@ -279,83 +293,106 @@ fun SettingsScreen(
                                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                 )
                             }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            IconButton(
+                                onClick = { isLogsExpanded = !isLogsExpanded },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isLogsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        // 操作按钮栏：复制全部日志 / 清空 / 自动滚动开关
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        AnimatedVisibility(
+                            visible = isLogsExpanded,
+                            enter = expandVertically(
+                                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow)
+                            ) + fadeIn(animationSpec = tween(220)),
+                            exit = shrinkVertically(
+                                animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
+                            ) + fadeOut(animationSpec = tween(180))
                         ) {
-                            OutlinedButton(
-                                onClick = {
-                                    val fullLog = logs.joinToString("\n") { "[${it.timestamp}] ${it.message}" }
-                                    clipboardManager.setText(AnnotatedString(fullLog))
-                                    Toast.makeText(context, if (isZh) "已复制全部日志" else "Logs copied", Toast.LENGTH_SHORT).show()
-                                },
-                                modifier = Modifier.weight(1f),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (isZh) "复制" else "Copy", fontSize = 12.sp)
-                            }
+                            Column {
+                                Spacer(modifier = Modifier.height(10.dp))
 
-                            OutlinedButton(
-                                onClick = { viewModel.clearLogs() },
-                                modifier = Modifier.weight(1f),
-                                shape = MaterialTheme.shapes.small
-                            ) {
-                                Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(if (isZh) "清空" else "Clear", fontSize = 12.sp)
-                            }
-
-                            FilterChip(
-                                selected = autoScrollEnabled,
-                                onClick = { autoScrollEnabled = !autoScrollEnabled },
-                                label = { Text(if (autoScrollEnabled) (if (isZh) "跟进" else "Follow") else (if (isZh) "暂停" else "Pause"), fontSize = 12.sp) },
-                                shape = MaterialTheme.shapes.small
-                            )
-                        }
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        // 内嵌日志展示容器（上下自由滑动，不抖动）
-                        Surface(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(280.dp),
-                            shape = MaterialTheme.shapes.medium,
-                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
-                        ) {
-                            if (logs.isEmpty()) {
-                                Box(
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentAlignment = Alignment.Center
+                                // 操作按钮栏：复制全部日志 / 清空 / 自动滚动开关
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    Text(
-                                        text = if (isZh) "暂无运行日志" else "No logs recorded",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    OutlinedButton(
+                                        onClick = {
+                                            val fullLog = logs.joinToString("\n") { "[${it.timestamp}] ${it.message}" }
+                                            clipboardManager.setText(AnnotatedString(fullLog))
+                                            Toast.makeText(context, if (isZh) "已复制全部日志" else "Logs copied", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.weight(1f),
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Icon(Icons.Outlined.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(if (isZh) "复制" else "Copy", fontSize = 12.sp)
+                                    }
+
+                                    OutlinedButton(
+                                        onClick = { viewModel.clearLogs() },
+                                        modifier = Modifier.weight(1f),
+                                        shape = MaterialTheme.shapes.small
+                                    ) {
+                                        Icon(Icons.Outlined.DeleteSweep, contentDescription = null, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                        Text(if (isZh) "清空" else "Clear", fontSize = 12.sp)
+                                    }
+
+                                    FilterChip(
+                                        selected = autoScrollEnabled,
+                                        onClick = { autoScrollEnabled = !autoScrollEnabled },
+                                        label = { Text(if (autoScrollEnabled) (if (isZh) "跟进" else "Follow") else (if (isZh) "暂停" else "Pause"), fontSize = 12.sp) },
+                                        shape = MaterialTheme.shapes.small
                                     )
                                 }
-                            } else {
-                                LazyColumn(
-                                    state = listState,
+
+                                Spacer(modifier = Modifier.height(12.dp))
+
+                                // 内嵌日志展示容器（上下自由滑动，不抖动）
+                                Surface(
                                     modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        .fillMaxWidth()
+                                        .height(280.dp),
+                                    shape = MaterialTheme.shapes.medium,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
                                 ) {
-                                    items(
-                                        items = logs,
-                                        key = { it.id },
-                                        contentType = { "log_item" }
-                                    ) { log ->
-                                        LogItemView(log = log)
+                                    if (logs.isEmpty()) {
+                                        Box(
+                                            modifier = Modifier.fillMaxSize(),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text(
+                                                text = if (isZh) "暂无运行日志" else "No logs recorded",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    } else {
+                                        LazyColumn(
+                                            state = listState,
+                                            modifier = Modifier
+                                                .fillMaxSize()
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            items(
+                                                items = logs,
+                                                key = { it.id },
+                                                contentType = { "log_item" }
+                                            ) { log ->
+                                                LogItemView(log = log)
+                                            }
+                                        }
                                     }
                                 }
                             }

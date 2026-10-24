@@ -24,7 +24,6 @@ class FontDecoder:
         Args:
             html_content: 包含加密字体信息的HTML内容
         """
-        self.html_content = html_content
         self.__font_map: Optional[Dict] = None
 
         if html_content:
@@ -36,6 +35,7 @@ class FontDecoder:
 
     def __init_font_map(self, html_content: str) -> None:
         """从HTML内容中提取字体信息并初始化字体映射。"""
+        soup = None
         try:
             soup = BeautifulSoup(html_content, "html.parser")
             style_text = ""
@@ -78,6 +78,12 @@ class FontDecoder:
         except Exception as e:
             print(f"[FontDecoder] 初始化字体映射警告: {e}")
             self.__font_map = {}
+        finally:
+            if soup is not None:
+                try:
+                    soup.decompose()
+                except Exception:
+                    pass
 
     def decode(self, target_str: str) -> str:
         """解码加密字符串。
@@ -95,5 +101,4 @@ class FontDecoder:
 
     def set_html_content(self, html_content: str) -> None:
         """设置新的HTML内容并重新初始化字体映射。"""
-        self.html_content = html_content
         self.__init_font_map(html_content)

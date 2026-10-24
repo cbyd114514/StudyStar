@@ -59,6 +59,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -483,7 +484,7 @@ fun LoginScreen(
             }
         }
 
-        // --- 从登录按钮展开到全屏的圆形涟漪揭示动画 ---
+        // --- 从登录按钮展开到全屏的水波形铺开动画 ---
         if (expandProgress > 0f) {
             val configuration = LocalConfiguration.current
             val density = LocalDensity.current
@@ -493,14 +494,62 @@ fun LoginScreen(
                 hypot(w, h) * 1.15f
             }
             val primaryColor = MaterialTheme.colorScheme.primary
+            val surfaceColor = MaterialTheme.colorScheme.surface
 
             Canvas(modifier = Modifier.fillMaxSize()) {
                 val center = if (buttonCenter != Offset.Zero) buttonCenter else this.center
+                val currentRadius = screenDiagonal * expandProgress
+
+                // 1. 水波主体平滑铺开
                 drawCircle(
                     color = primaryColor,
-                    radius = screenDiagonal * expandProgress,
+                    radius = currentRadius,
                     center = center
                 )
+
+                // 2. 主水波边缘过渡光晕
+                drawCircle(
+                    color = surfaceColor.copy(alpha = (0.35f * (1f - expandProgress * 0.7f)).coerceIn(0f, 1f)),
+                    radius = currentRadius,
+                    center = center,
+                    style = Stroke(width = 8.dp.toPx())
+                )
+
+                // 3. 第一道同心水波涟漪环（前置动态水波）
+                val wave1Radius = currentRadius * 1.12f + 18.dp.toPx()
+                val wave1Alpha = ((1f - expandProgress) * 0.55f).coerceIn(0f, 1f)
+                if (wave1Alpha > 0.01f) {
+                    drawCircle(
+                        color = surfaceColor.copy(alpha = wave1Alpha),
+                        radius = wave1Radius,
+                        center = center,
+                        style = Stroke(width = 5.dp.toPx())
+                    )
+                }
+
+                // 4. 第二道同心水波涟漪环（更外层柔和波纹）
+                val wave2Radius = currentRadius * 1.25f + 36.dp.toPx()
+                val wave2Alpha = ((1f - expandProgress) * 0.35f).coerceIn(0f, 1f)
+                if (wave2Alpha > 0.01f) {
+                    drawCircle(
+                        color = surfaceColor.copy(alpha = wave2Alpha),
+                        radius = wave2Radius,
+                        center = center,
+                        style = Stroke(width = 3.dp.toPx())
+                    )
+                }
+
+                // 5. 第三道同心水波内环（紧随其后的内圈涟漪）
+                val wave3Radius = (currentRadius * 0.85f).coerceAtLeast(0f)
+                val wave3Alpha = ((1f - expandProgress) * 0.45f).coerceIn(0f, 1f)
+                if (wave3Alpha > 0.01f && wave3Radius > 0f) {
+                    drawCircle(
+                        color = surfaceColor.copy(alpha = wave3Alpha),
+                        radius = wave3Radius,
+                        center = center,
+                        style = Stroke(width = 4.dp.toPx())
+                    )
+                }
             }
         }
     }

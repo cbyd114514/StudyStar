@@ -1284,9 +1284,12 @@ class AndroidStudyEngine:
             return None
         patterns = [
             r'class=[\'"][^\'"]*(?:viewScore|totalScore|marking-score|col-green|num)[^\'"]*[\'"][^>]*>([\d.]+)(?:分)?<',
-            r'(?:得分|成绩|测试成绩|最终成绩)[：:]\s*(?:<[^>]+>)*\s*([\d.]+)(?:分)?',
+            r'(?:得分|成绩|测试成绩|最终成绩|当前成绩|总成绩|本次成绩)[：:]\s*(?:<[^>]+>)*\s*([\d.]+)(?:分)?',
             r'class=[\'"]score[\'"][^>]*>([\d.]+)(?:分)?<',
+            r'<span[^>]*class=[\'"][^\'"]*col-green[^\'"]*[\'"][^>]*>([\d.]+)</span>',
+            r'<td[^>]*>([\d.]+)分?</td>',
             r'"score"\s*:\s*([\d.]+)',
+            r'"totalScore"\s*:\s*([\d.]+)',
             r'score\s*=\s*[\'"]?([\d.]+)[\'"]?',
             r'viewScore">([\d.]+)',
         ]
@@ -1299,86 +1302,227 @@ class AndroidStudyEngine:
                     pass
         return None
 
-    def _check_work_score(self, _course, _job, _job_info, questions) -> Optional[float]:
-        """
-        获取最新一次提交的测验成绩，支持多接口与多模式探测
-        """
-        work_id = str(questions.get("workId", "") or _job.get("jobid", "").replace("work-", ""))
-        work_answer_id = str(questions.get("workAnswerId", "") or "")
-        course_id = str(_course.get("courseId", ""))
-        class_id = str(_course.get("clazzId", ""))
-        cpi = str(_course.get("cpi", "") or questions.get("cpi", ""))
-
-        target_urls = [
-            ("https://mooc1.chaoxing.com/mooc-ans/work/record-list", {
-                "courseId": course_id,
-                "classId": class_id,
-                "workId": work_id,
-                "workAnswerId": work_answer_id,
-                "cpi": cpi,
-                "api": "1",
-                "mooc2": "1",
-                "ut": "s",
-            }),
-            ("https://mooc1.chaoxing.com/mooc-ans/work/selectWorkQuestionYiPiYue", {
-                "courseId": course_id,
-                "classId": class_id,
-                "workId": work_id,
-                "workAnswerId": work_answer_id,
-                "cpi": cpi,
-            }),
-            ("https://mooc1.chaoxing.com/mooc-ans/api/work", {
-                "api": "1",
-                "workId": work_id,
-                "jobid": _job.get("jobid", ""),
-                "knowledgeid": str(_job_info.get("knowledgeid", "")),
-                "ktoken": _job_info.get("ktoken", ""),
-                "cpi": cpi,
-                "clazzId": class_id,
-                "courseid": course_id,
-            })
-        ]
-
-        for _ in range(3):
-            time.sleep(1.0)
-            for url, params in target_urls:
-                try:
-                    resp = self.session.get(url, params=params, timeout=15)
-                    if resp.status_code == 200:
-                        score = self._extract_score_from_html(resp.text)
-                        if score is not None:
-                            return score
-                except Exception:
-                    pass
-        return None
-
     def _find_redo_url(self, html: str, current_url: str, _course: dict, _job: dict, _job_info: dict) -> Optional[str]:
         """
         探测测验重做（Redo）入口链接与跳转地址
+        支持原生链接、onclick、数据属性及脚本中 reDo 函数调用多重解析
         """
         if not html:
             return None
+        course_id = str(_course.get("courseId", ""))
+        class_id = str(_course.get("clazzId", ""))
+        work_id = str(_job.get("jobid", "").replace("work-", ""))
+        job_id = _job.get("jobid", "")
+        knowledge_id = str(_job_info.get("knowledgeid", ""))
+        ktoken = str(_job_info.get("ktoken", ""))
+        cpi = str(_course.get("cpi", "") or _job_info.get("cpi", ""))
+        enc = str(_job.get("enc", ""))
+
         try:
             soup = BeautifulSoup(html, "html.parser")
             for tag in soup.find_all(["a", "button", "span", "input"]):
                 text = (tag.get_text() or tag.get("value") or "").strip()
-                if any(w in text for w in ["重做", "重新作答", "重新答题", "再做一次", "重考"]):
+                if any(w in text for w in ["重做", "重新作答", "重新答题", "再做一次", "重考", "再测一次"]):
+                    # 1. 检查直接链接
                     href = tag.get("href")
                     if href and not href.startswith("javascript:"):
+                        soup.decompose()
                         return urllib.parse.urljoin(current_url, href)
+
+                    # 2. 检查自定义数据属性
+                    data_url = tag.get("data-url") or tag.get("data-href")
+                    if data_url:
+                        soup.decompose()
+                        return urllib.parse.urljoin(current_url, data_url)
+
+                    # 3. 检查 onclick 中的 reDo('12345') / reDoWork('12345')
                     onclick = tag.get("onclick") or ""
                     if onclick:
+                        m_redo_id = re.search(r"""reDo(?:Work)?\s*\(\s*['"]?(\d+)['"]?""", onclick)
+                        if m_redo_id:
+                            target_answer_id = m_redo_id.group(1)
+                            soup.decompose()
+                            return f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={target_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true"
+
                         m_href = re.search(r"""(?:href|open)\s*\(?['"]([^'"]+)['"]""", onclick)
                         if m_href:
+                            soup.decompose()
                             return urllib.parse.urljoin(current_url, m_href.group(1))
 
-            m_link = re.search(r"""href=['"]([^'"]*(?:reDo|redo|doHomeWorkNew)[^'"]*)['"]""", html, re.IGNORECASE)
+            soup.decompose()
+
+            # 4. 全局匹配包含 reDo 的超链接
+            m_link = re.search(r"""(?:href|data-url)=['"]([^'"]*(?:reDo=true|redo=true|doHomeWorkNew[^'"]*reDo)[^'"]*)['"]""", html, re.IGNORECASE)
             if m_link:
                 return urllib.parse.urljoin(current_url, m_link.group(1))
+
+            # 5. 全局匹配脚本调用 reDo('12345')
+            m_fn = re.search(r"""reDo(?:Work)?\s*\(\s*['"]?(\d+)['"]?""", html)
+            if m_fn:
+                target_answer_id = m_fn.group(1)
+                return f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={target_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true"
+
         except Exception:
             pass
 
         return None
+
+    def _check_work_score_and_details(self, _course, _job, _job_info, questions, last_work_answer_id="") -> dict:
+        """
+        获取最新提交的测验成绩、作答ID及重做入口
+        返回 dict: score, workAnswerId, redo_url, known_answers, is_graded
+        """
+        work_id = str(questions.get("workId", "") or _job.get("jobid", "").replace("work-", ""))
+        job_id = _job.get("jobid", "")
+        work_answer_id = str(questions.get("workAnswerId", "") or last_work_answer_id or "")
+        course_id = str(_course.get("courseId", ""))
+        class_id = str(_course.get("clazzId", ""))
+        cpi = str(_course.get("cpi", "") or questions.get("cpi", "") or _job_info.get("cpi", ""))
+        knowledge_id = str(_job_info.get("knowledgeid", ""))
+        ktoken = str(_job_info.get("ktoken", ""))
+        enc = str(_job.get("enc", ""))
+
+        result = {
+            "score": None,
+            "workAnswerId": work_answer_id,
+            "redo_url": None,
+            "known_answers": {},
+            "is_graded": False
+        }
+
+        # 尝试轮询 4 次（每次间隔 1.5 秒），等待超星服务端判分与入库
+        for check_idx in range(4):
+            time.sleep(1.5)
+
+            # 1. 查询 mooc-ans/api/work 获取最新状态与跳转页面
+            api_work_params = {
+                "api": "1",
+                "workId": work_id,
+                "jobid": job_id,
+                "originJobId": job_id,
+                "needRedirect": "true",
+                "skipHeader": "true",
+                "knowledgeid": knowledge_id,
+                "ktoken": ktoken,
+                "cpi": cpi,
+                "ut": "s",
+                "clazzId": class_id,
+                "type": "",
+                "enc": enc,
+                "mooc2": "1",
+                "courseid": course_id,
+            }
+            if result["workAnswerId"]:
+                api_work_params["workAnswerId"] = result["workAnswerId"]
+
+            try:
+                resp = self.session.get("https://mooc1.chaoxing.com/mooc-ans/api/work", params=api_work_params, timeout=20)
+                if resp.status_code == 200:
+                    score = self._extract_score_from_html(resp.text)
+                    if score is not None:
+                        result["score"] = score
+                        result["is_graded"] = True
+
+                    m_wa = re.search(r'workAnswerId\s*[:=]\s*[\'"]?(\d+)[\'"]?', resp.text) or \
+                           re.search(r'name=[\'"]workAnswerId[\'"]\s+value=[\'"](\d+)[\'"]', resp.text) or \
+                           re.search(r'[?&]workAnswerId=(\d+)', resp.text)
+                    if m_wa and not result["workAnswerId"]:
+                        result["workAnswerId"] = m_wa.group(1)
+
+                    redo = self._find_redo_url(resp.text, resp.url, _course, _job, _job_info)
+                    if redo and not result["redo_url"]:
+                        result["redo_url"] = redo
+            except Exception as e:
+                self.log(f"[作业] 查询 api/work 容错: {e}")
+
+            # 2. 查询 mooc-ans/work/record-list 记录列表
+            record_params = {
+                "courseId": course_id,
+                "classId": class_id,
+                "workId": work_id,
+                "cpi": cpi,
+                "api": "1",
+                "mooc2": "1",
+                "ut": "s",
+            }
+            if result["workAnswerId"]:
+                record_params["workAnswerId"] = result["workAnswerId"]
+
+            try:
+                rec_resp = self.session.get("https://mooc1.chaoxing.com/mooc-ans/work/record-list", params=record_params, timeout=20)
+                if rec_resp.status_code == 200:
+                    wa_list = re.findall(r'workAnswerId=(\d+)', rec_resp.text)
+                    if wa_list:
+                        result["workAnswerId"] = wa_list[-1]
+
+                    rec_score = self._extract_score_from_html(rec_resp.text)
+                    if rec_score is not None and result["score"] is None:
+                        result["score"] = rec_score
+                        result["is_graded"] = True
+
+                    rec_redo = self._find_redo_url(rec_resp.text, rec_resp.url, _course, _job, _job_info)
+                    if rec_redo and not result["redo_url"]:
+                        result["redo_url"] = rec_redo
+            except Exception as e:
+                self.log(f"[作业] 查询 record-list 容错: {e}")
+
+            # 3. 若有 workAnswerId，查询 selectWorkQuestionYiPiYue 获取已批阅成绩与正确答案
+            if result["workAnswerId"]:
+                try:
+                    detail_resp = self.session.get(
+                        "https://mooc1.chaoxing.com/mooc-ans/work/selectWorkQuestionYiPiYue",
+                        params={
+                            "courseId": course_id,
+                            "classId": class_id,
+                            "workId": work_id,
+                            "workAnswerId": result["workAnswerId"],
+                            "cpi": cpi,
+                            "api": "1",
+                            "mooc2": "1",
+                            "ut": "s",
+                        },
+                        timeout=20
+                    )
+                    if detail_resp.status_code == 200:
+                        detail_score = self._extract_score_from_html(detail_resp.text)
+                        if detail_score is not None:
+                            result["score"] = detail_score
+                            result["is_graded"] = True
+
+                        detail_redo = self._find_redo_url(detail_resp.text, detail_resp.url, _course, _job, _job_info)
+                        if detail_redo and not result["redo_url"]:
+                            result["redo_url"] = detail_redo
+
+                        soup_detail = BeautifulSoup(detail_resp.text, "html.parser")
+                        try:
+                            timu_nodes = soup_detail.find_all("div", class_="TiMu")
+                            for node in timu_nodes:
+                                title_node = node.find("div", class_="Zy_TItle")
+                                if not title_node:
+                                    continue
+                                q_title = self._extract_title(title_node)
+                                m_ans = re.search(r'正确答案[：:\s]*([A-Za-z0-9对错√×\u4e00-\u9fa5]+)', node.get_text())
+                                if m_ans:
+                                    correct_ans = m_ans.group(1).strip()
+                                    if correct_ans:
+                                        result["known_answers"][q_title] = correct_ans
+                        finally:
+                            soup_detail.decompose()
+                except Exception as e:
+                    self.log(f"[作业] 查询 selectWorkQuestionYiPiYue 容错: {e}")
+
+            if result["score"] is not None:
+                self.log(f"[作业] 成功获取测验成绩: {result['score']} 分 (作答ID: {result['workAnswerId']})")
+                return result
+
+        return result
+
+    def _check_work_score(self, _course, _job, _job_info, questions) -> Optional[float]:
+        """
+        获取最新一次提交的测验成绩，支持多接口与多模式探测
+        """
+        details = self._check_work_score_and_details(_course, _job, _job_info, questions)
+        return details.get("score")
 
 
     def study_topic_job(self, course, job, job_info) -> StudyResult:
@@ -1490,13 +1634,18 @@ class AndroidStudyEngine:
     def study_work(self, _course, _job, _job_info) -> StudyResult:
         """
         完成作业/测验任务，支持未及格自动重做（直到达到及格线60分或达最大重做次数）
+        深度适配超星新旧作业架构、多轮重做入口提取与已批阅正解智能缓存
         """
-        max_attempts = 3
+        max_attempts = 4
         last_score = None
+        latest_work_answer_id = ""
+        next_redo_url = None
+        known_correct_answers = {}
 
         course_id = str(_course.get("courseId", ""))
         class_id = str(_course.get("clazzId", ""))
         work_id = str(_job.get("jobid", "").replace("work-", ""))
+        job_id = _job.get("jobid", "")
         knowledge_id = str(_job_info.get("knowledgeid", ""))
         ktoken = str(_job_info.get("ktoken", ""))
         cpi = str(_course.get("cpi", "") or _job_info.get("cpi", ""))
@@ -1615,17 +1764,27 @@ class AndroidStudyEngine:
                     self.log(f"[作业] 请求失败: {e}")
                     return StudyResult.ERROR
             else:
-                # 重做轮次：通过 redo 入口获取重做作答表单
-                candidate_redo_urls = [
-                    f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={_job.get('jobid', '')}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&reDo=true&api=1",
-                    f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={_job.get('jobid', '')}&originJobId={_job.get('jobid', '')}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true",
-                    f"https://mooc1.chaoxing.com/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={_job.get('jobid', '')}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&reDo=true"
-                ]
+                # 重做轮次：通过 redo 入口及最新作答ID构建重做作答表单链接
+                candidate_redo_urls = []
+                if next_redo_url:
+                    candidate_redo_urls.append(next_redo_url)
+                if latest_work_answer_id:
+                    candidate_redo_urls.extend([
+                        f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={latest_work_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true",
+                        f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={job_id}&originJobId={job_id}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true&workAnswerId={latest_work_answer_id}",
+                        f"https://mooc1.chaoxing.com/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={latest_work_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&reDo=true",
+                    ])
+                candidate_redo_urls.extend([
+                    f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true",
+                    f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={job_id}&originJobId={job_id}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true",
+                    f"https://mooc1.chaoxing.com/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&reDo=true"
+                ])
+
                 for r_url in candidate_redo_urls:
                     try:
                         self.log(f"[作业] 正在获取重做作答页: {r_url}")
-                        r_resp = self.session.get(r_url, timeout=30)
-                        if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "form" in r_resp.text.lower()):
+                        r_resp = self.session.get(r_url, headers={"Referer": "https://mooc1.chaoxing.com/mooc-ans/api/work"}, timeout=30)
+                        if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "TiMu" in r_resp.text or "totalQuestionNum" in r_resp.text or "form" in r_resp.text.lower()):
                             resp = r_resp
                             resp_text = r_resp.text
                             self.log("[作业] 成功获取重做作答页面")
@@ -1633,7 +1792,7 @@ class AndroidStudyEngine:
                     except Exception:
                         pass
 
-                if not resp or ("singleQuesId" not in resp_text and "form" not in resp_text.lower()):
+                if not resp or ("singleQuesId" not in resp_text and "TiMu" not in resp_text and "totalQuestionNum" not in resp_text and "form" not in resp_text.lower()):
                     self.log(f"[作业] 重做入口未开放或平台限制重做，保留当前成绩: {last_score} 分")
                     return StudyResult.SUCCESS
 
@@ -1647,10 +1806,8 @@ class AndroidStudyEngine:
 
             # 检查是否此前已经提交过
             if attempt == 0 and any(w in resp_text for w in ["已经提交过作业", "你已经提交", "作业已提交", "已提交"]):
-                score = self._extract_score_from_html(resp_text)
-                if score is None:
-                    score = self._check_work_score(_course, _job, _job_info, {"workId": work_id})
-
+                details = self._check_work_score_and_details(_course, _job, _job_info, {"workId": work_id})
+                score = details.get("score")
                 if score is not None:
                     last_score = score
                     if score >= 60.0:
@@ -1658,20 +1815,29 @@ class AndroidStudyEngine:
                         return StudyResult.SUCCESS
                     else:
                         self.log(f"[作业] 该作业此前已提交但未及格 (得分: {score} 分 < 60分)，正在准备自动重做...")
-                        redo_url = self._find_redo_url(resp_text, resp.url, _course, _job, _job_info)
+                        latest_work_answer_id = details.get("workAnswerId") or ""
+                        next_redo_url = details.get("redo_url") or self._find_redo_url(resp_text, resp.url, _course, _job, _job_info)
+                        if details.get("known_answers"):
+                            known_correct_answers.update(details.get("known_answers"))
+
                         candidate_redo_urls = []
-                        if redo_url:
-                            candidate_redo_urls.append(redo_url)
+                        if next_redo_url:
+                            candidate_redo_urls.append(next_redo_url)
+                        if latest_work_answer_id:
+                            candidate_redo_urls.extend([
+                                f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={latest_work_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true",
+                                f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={job_id}&originJobId={job_id}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true&workAnswerId={latest_work_answer_id}",
+                                f"https://mooc1.chaoxing.com/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&workAnswerId={latest_work_answer_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&reDo=true",
+                            ])
                         candidate_redo_urls.extend([
-                            f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={_job.get('jobid', '')}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&reDo=true&api=1",
-                            f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={_job.get('jobid', '')}&originJobId={_job.get('jobid', '')}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true",
-                            f"https://mooc1.chaoxing.com/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={_job.get('jobid', '')}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&reDo=true"
+                            f"https://mooc1.chaoxing.com/mooc-ans/work/doHomeWorkNew?courseId={course_id}&classId={class_id}&workId={work_id}&jobid={job_id}&originJobId={job_id}&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&enc={enc}&mooc2=1&skipHeader=true&api=1&reDo=true",
+                            f"https://mooc1.chaoxing.com/mooc-ans/api/work?api=1&workId={work_id}&jobid={job_id}&originJobId={job_id}&needRedirect=true&skipHeader=true&knowledgeid={knowledge_id}&ktoken={ktoken}&cpi={cpi}&ut=s&clazzId={class_id}&enc={enc}&mooc2=1&courseid={course_id}&reDo=true",
                         ])
                         got_redo_form = False
                         for r_url in candidate_redo_urls:
                             try:
-                                r_resp = self.session.get(r_url, timeout=30)
-                                if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "form" in r_resp.text.lower()):
+                                r_resp = self.session.get(r_url, headers={"Referer": "https://mooc1.chaoxing.com/mooc-ans/api/work"}, timeout=30)
+                                if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "TiMu" in r_resp.text or "totalQuestionNum" in r_resp.text or "form" in r_resp.text.lower()):
                                     resp = r_resp
                                     resp_text = r_resp.text
                                     got_redo_form = True
@@ -1703,6 +1869,7 @@ class AndroidStudyEngine:
                         self.log(f"[作业] 发现页面跳转脚本，正在重定向: {redir_url}")
                         resp = self.session.get(redir_url, timeout=30)
                         resp_text = resp.text
+                soup_initial.decompose()
             except Exception as e:
                 self.log(f"[作业] 跳转检测容错: {e}")
 
@@ -1714,6 +1881,9 @@ class AndroidStudyEngine:
                     return StudyResult.SUCCESS
                 self.log("[作业] 未提取到题目，可能已作答完毕，跳过")
                 return StudyResult.SUCCESS
+
+            if questions.get("workAnswerId"):
+                latest_work_answer_id = str(questions.get("workAnswerId"))
 
             total_questions = len(questions["questions"])
             found_answers = 0
@@ -1730,7 +1900,13 @@ class AndroidStudyEngine:
                 answer = ""
                 res = None
 
-                if hasattr(self, "llm_provider") and self.llm_provider:
+                # 优先匹配上一轮已批阅提取出的真实标准答案
+                if title in known_correct_answers:
+                    answer = known_correct_answers[title]
+                    self.log(f"[作业] 命中上一轮已批阅正确答案 -> {answer}")
+                    q[f"answerSource{q_id}"] = "cover"
+                    found_answers += 1
+                elif hasattr(self, "llm_provider") and self.llm_provider:
                     try:
                         res = self.llm_provider.query(q)
                         if res:
@@ -1738,7 +1914,7 @@ class AndroidStudyEngine:
                     except Exception as e:
                         self.log(f"[作业] 大模型查询异常: {e}")
 
-                if res:
+                if not answer and res:
                     res_str = str(res).strip()
                     if q_type == "single":
                         if len(res_str) == 1 and res_str.upper() in "ABCDEFG":
@@ -1826,6 +2002,7 @@ class AndroidStudyEngine:
                 submit_url = urllib.parse.urljoin(resp.url, form_action).split("?")[0]
             else:
                 submit_url = f"{origin}/mooc-ans/work/addStudentWorkNew"
+            soup_doc.decompose()
 
             submit_headers = {
                 "Host": host,
@@ -1862,9 +2039,14 @@ class AndroidStudyEngine:
                     self.log(f"[作业] 提交答题成功 -> {msg}")
                     set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
 
-                    score = self._extract_score_from_html(res.text)
-                    if score is None:
-                        score = self._check_work_score(_course, _job, _job_info, questions)
+                    details = self._check_work_score_and_details(_course, _job, _job_info, questions, latest_work_answer_id)
+                    score = details.get("score")
+                    if details.get("workAnswerId"):
+                        latest_work_answer_id = details.get("workAnswerId")
+                    if details.get("redo_url"):
+                        next_redo_url = details.get("redo_url")
+                    if details.get("known_answers"):
+                        known_correct_answers.update(details.get("known_answers"))
 
                     if score is not None:
                         last_score = score
@@ -1877,10 +2059,10 @@ class AndroidStudyEngine:
                                 self.log(f"[作业] 准备进行第 {attempt + 2}/{max_attempts} 轮自动重做...")
                                 continue
                             else:
-                                self.log(f"[作业] 已达最大重做次数，保留成绩: {score} 分")
+                                self.log(f"[作业] 已达最大重做轮次 ({max_attempts} 轮)，保留最终成绩: {score} 分")
                                 return StudyResult.SUCCESS
                     else:
-                        self.log("[作业] 测验已提交完成")
+                        self.log("[作业] 测验已提交完成（平台尚未出分，可能需教师主观批阅）")
                         return StudyResult.SUCCESS
 
                 if any(w in msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已经作答", "已完成", "作业已截止", "已批阅"]):
@@ -1911,9 +2093,15 @@ class AndroidStudyEngine:
                         pass
 
                 if submitted_alt:
-                    score = self._extract_score_from_html(res_alt.text if 'res_alt' in locals() else "")
-                    if score is None:
-                        score = self._check_work_score(_course, _job, _job_info, questions)
+                    details = self._check_work_score_and_details(_course, _job, _job_info, questions, latest_work_answer_id)
+                    score = details.get("score")
+                    if details.get("workAnswerId"):
+                        latest_work_answer_id = details.get("workAnswerId")
+                    if details.get("redo_url"):
+                        next_redo_url = details.get("redo_url")
+                    if details.get("known_answers"):
+                        known_correct_answers.update(details.get("known_answers"))
+
                     if score is not None:
                         last_score = score
                         if score >= 60.0:
@@ -1925,7 +2113,7 @@ class AndroidStudyEngine:
                                 self.log(f"[作业] 准备进行第 {attempt + 2}/{max_attempts} 轮自动重做...")
                                 continue
                             else:
-                                self.log(f"[作业] 已达最大重做次数，保留成绩: {score} 分")
+                                self.log(f"[作业] 已达最大重做轮次 ({max_attempts} 轮)，保留最终成绩: {score} 分")
                                 return StudyResult.SUCCESS
                     return StudyResult.SUCCESS
 
@@ -1948,6 +2136,9 @@ class AndroidStudyEngine:
                 self.log(f"[作业] 提交网络或服务器异常: {e}")
                 if attempt >= max_attempts - 1:
                     return StudyResult.ERROR
+            finally:
+                del questions
+                gc.collect()
 
         return StudyResult.SUCCESS
 
@@ -1958,48 +2149,51 @@ class AndroidStudyEngine:
         全面支持超星学习通加密字体解码与题型精准识别
         """
         soup = BeautifulSoup(html_content, "html.parser")
-        form_data = self._extract_form_data(soup, html_content, resp, _course, _job, _job_info)
-        if not form_data:
-            form_tag = soup.find("form")
-            if form_tag:
-                form_data = {}
-            else:
-                return {}
-
-        # 检查并初始化字体解码器
-        has_font_encryption = bool(soup.find("style", id="cxSecretStyle")) or ("cxsecret" in html_content) or ("@font-face" in html_content and "base64," in html_content)
-        font_decoder = None
-
-        if has_font_encryption:
-            try:
-                from font_decoder import FontDecoder
-                font_decoder = FontDecoder(html_content)
-                if font_decoder.is_initialized():
-                    self.log("[解析] 检测到加密字体，已成功初始化字体解码器")
+        try:
+            form_data = self._extract_form_data(soup, html_content, resp, _course, _job, _job_info)
+            if not form_data:
+                form_tag = soup.find("form")
+                if form_tag:
+                    form_data = {}
                 else:
-                    self.log("[解析] 页面含加密样式标识，字体解码器就绪")
-            except Exception as e:
-                self.log(f"[解析] 字体解码器初始化容错: {e}")
-                font_decoder = None
-        else:
-            self.log("[解析] 当前页面未检测到加密字体")
+                    return {}
 
-        questions = []
-        form_tag = soup.find("form")
-        search_root = form_tag if form_tag else soup
+            # 检查并初始化字体解码器
+            has_font_encryption = bool(soup.find("style", id="cxSecretStyle")) or ("cxsecret" in html_content) or ("@font-face" in html_content and "base64," in html_content)
+            font_decoder = None
 
-        for div_tag in search_root.find_all("div", class_="singleQuesId"):
-            try:
-                q = self._process_question(div_tag, font_decoder)
-                if q:
-                    questions.append(q)
-            except Exception as e:
-                self.log(f"[解析] 处理单个题目容错: {e}")
-                continue
+            if has_font_encryption:
+                try:
+                    from font_decoder import FontDecoder
+                    font_decoder = FontDecoder(html_content)
+                    if font_decoder.is_initialized():
+                        self.log("[解析] 检测到加密字体，已成功初始化字体解码器")
+                    else:
+                        self.log("[解析] 页面含加密样式标识，字体解码器就绪")
+                except Exception as e:
+                    self.log(f"[解析] 字体解码器初始化容错: {e}")
+                    font_decoder = None
+            else:
+                self.log("[解析] 当前页面未检测到加密字体")
 
-        form_data["questions"] = questions
-        form_data["answerwqbid"] = ",".join([q["id"] for q in questions]) + ","
-        return form_data
+            questions = []
+            form_tag = soup.find("form")
+            search_root = form_tag if form_tag else soup
+
+            for div_tag in search_root.find_all("div", class_="singleQuesId"):
+                try:
+                    q = self._process_question(div_tag, font_decoder)
+                    if q:
+                        questions.append(q)
+                except Exception as e:
+                    self.log(f"[解析] 处理单个题目容错: {e}")
+                    continue
+
+            form_data["questions"] = questions
+            form_data["answerwqbid"] = ",".join([q["id"] for q in questions]) + ","
+            return form_data
+        finally:
+            soup.decompose()
 
     def _extract_form_data(self, soup: BeautifulSoup, html_content: str = "", resp=None, _course=None, _job=None, _job_info=None) -> dict:
         """
@@ -2540,6 +2734,7 @@ class AndroidStudyEngine:
         set_study_progress(1.0)
         clear_current_video()
         clear_current_quiz()
+        gc.collect()
         self.log(f"课程学习完成: {course_name}")
 
     def run(self, course_ids=None, speed=1.0, jobs=4):
