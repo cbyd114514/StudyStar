@@ -33,6 +33,98 @@ object AppStrings {
     fun autoLoginCheckbox(lang: String): String =
         if (lang == "zh") "自动登录 (下次启动自动进入)" else "Auto Login (Log in automatically next time)"
 
+    fun legalCheckboxPrefix(lang: String): String =
+        if (lang == "zh") "我已阅读并同意" else "I have read and agree to "
+
+    fun legalTermsTitle(lang: String): String =
+        if (lang == "zh") "《法律合规与免责声明》" else "Legal Compliance & Disclaimers"
+
+    fun legalAgreementRequired(lang: String): String =
+        if (lang == "zh") "请先阅读并勾选同意《法律合规与免责声明》"
+        else "Please read and tick to agree to the Legal Compliance & Disclaimers first"
+
+    fun legalDialogTitle(lang: String): String =
+        if (lang == "zh") "基于中华人民共和国法律的合规与免责声明"
+        else "Legal Compliance & Disclaimer Statement (PRC Law)"
+
+    fun legalDialogAgree(lang: String): String =
+        if (lang == "zh") "我已阅读并完全同意" else "I Have Read and Agree"
+
+    fun legalDialogClose(lang: String): String =
+        if (lang == "zh") "关闭" else "Close"
+
+    fun settingsLegalCardTitle(lang: String): String =
+        if (lang == "zh") "法律合规与免责声明" else "Legal Compliance & Disclaimers"
+
+    fun settingsLegalCardSubtitle(lang: String): String =
+        if (lang == "zh") "依据《中华人民共和国网络安全法》、《刑法》及高校学籍规范的合规声明"
+        else "Compliance terms pursuant to PRC Cybersecurity Law, Criminal Law, and academic integrity regulations"
+
+    fun settingsLegalCardBtn(lang: String): String =
+        if (lang == "zh") "查阅完整法律声明条款" else "Read Full Legal Terms"
+
+    fun legalDialogContent(lang: String): String =
+        if (lang == "zh") """【前言与特别提示】
+欢迎使用“学习星 (StudyStar)”开源辅助工具。在您下载、安装、登录或使用本软件前，请务必仔细阅读并充分理解本《基于中华人民共和国法律的合规与免责声明》（以下简称“本声明”）。
+当您勾选“我已阅读并同意”或实际登录、运行本软件，即视为您已完全知悉、理解并自愿承诺严格遵守本声明的全部条款。如您不同意本声明的任何条款，请勿勾选并立即退出卸载本软件。
+
+一、法律依据与合规基准
+本声明依据《中华人民共和国刑法》、《中华人民共和国民法典》、《中华人民共和国网络安全法》、《中华人民共和国数据安全法》、《中华人民共和国个人信息保护法》、《中华人民共和国计算机信息系统安全保护条例》及教育部《普通高等学校学生管理规定》（教育部令第41号）等国家现行法律法规制定。用户在使用本软件过程中的一切行为均受上述法律法规约束。
+
+二、研发宗旨与非商业学术性质
+1. 本软件为开源计算机技术探索与学术研究项目，旨在研究 Android 现代响应式架构、网络协议解析与异步高并发通信、Material Design 3 人机交互规范及端侧硬件级密钥加密存储方案。
+2. 开发者从未、亦绝不鼓励或诱导任何用户利用本软件从事违背高校学术诚信、规避教学考核监管、虚构在线学习记录、代考代刷或逃避正当学业义务的行为。
+
+三、严正禁止之违法违规行为
+任何个人、机构或组织在使用本软件时，严禁从事以下行为：
+1. 违反《中华人民共和国刑法》第二百八十五条（非法侵入计算机信息系统罪，非法获取计算机信息系统数据、非法控制计算机信息系统罪）、第二百八十六条（破坏计算机信息系统罪）及《网络安全法》第二十七条，利用本软件对第三方服务器实施超出合理负载的高频并发请求、恶意压力测试、DDOS攻击或任何破坏、干扰网络系统正常运行的非法行为；
+2. 违反教育部及各级各类高等院校的学生学籍管理规定与考试纪律，将本软件用于不正当学业竞争、考试舞弊或弄虚作假；
+3. 将本软件或其衍生版本用于牟利、商业倒卖、有偿代刷代课、打包出售或作为商业增值服务提供给第三方；
+4. 对本软件实施逆向工程、反编译或篡改后植入恶意代码、后门程序并进行二次传播。
+
+四、个人信息保护与本地安全离线存储
+1. 本软件为纯本地客户端架构，不设立任何收集用户账号、密码、个人身份信息或课程数据的中央云端服务器。
+2. 用户输入的超星学习通账号与密码，仅在用户本地设备上使用 Android KeyStore 硬件级派生密钥，通过 AES-256-GCM 算法进行高强度加密离线存储；网络通信全程强制采用 TLS/HTTPS 协议与官方服务器直连。
+3. 用户因个人设备保管不当、Root越狱、安装来源不明的恶意软件或主动向第三方泄露账号密码导致的信息泄露或资产损失，由用户自行承担全部责任。
+
+五、知识产权与第三方权益边界
+超星学习通（ChaoXing / SuperStar）及其相关商标、标识、软件著作权与接口服务权属均归北京世纪超星信息技术发展有限责任公司及其关联权利人依法所有。本软件为独立的第三方开源技术探索作品，与超星公司不存在任何形式的官方隶属、合作、认可、背书或商业授权关系。
+
+六、免责声明与风险自担（AS-IS）
+1. 本软件按“现状 (AS-IS)”与“现有”基础提供，开发者明确不对本软件的功能完整性、持续可用性、适配性或无任何运行异常作任何明示或暗示的保证。
+2. 用户基于完全自主意愿下载并使用本软件，自愿承担由于使用本软件可能产生的一切直接或间接风险与法律后果（包括但不限于账号被封禁、学习进度或测验成绩被作废、受到学校通报纪律处分、或因超出合规范围使用引发的行政与民事追责）。开发者不就任何用户的个人使用行为承担任何直接、间接、附带、连带或衍生性民事或刑事法律责任。
+
+七、声明的接受与生效
+用户在登录界面勾选同意本声明，即构成用户与开发者之间具有法律效力的约束性约定。若用户对本声明的任何条款持有异议，应立即停止使用并卸载本软件。"""
+        else """[Special Notice]
+Welcome to "StudyStar". Before downloading, installing, logging in, or using this application, please read and fully understand this Legal Compliance & User Agreement Statement under PRC Law (hereinafter "the Statement").
+By ticking "I have read and agree" or by continuing to use the software, you acknowledge that you have read, understood, and voluntarily agree to comply with all terms herein. If you disagree, do not tick the box and immediately exit and uninstall the application.
+
+1. Legal Basis & Scope:
+This Statement is formulated in strict accordance with the Criminal Law, Civil Code, Cybersecurity Law, Data Security Law, and Personal Information Protection Law of the People's Republic of China, as well as Ministry of Education regulations on student academic integrity. All user conduct is bound by these laws.
+
+2. Purpose & Academic Nature:
+This software is an open-source technical research project designed to explore mobile concurrent architectures, automated protocol parsing, Material Design 3 guidelines, and on-device hardware encryption. The developers strictly prohibit and do not condone using this software to evade academic supervision, falsify study records, or cheat.
+
+3. Prohibited Activities:
+Users are strictly prohibited from:
+- Violating Articles 285 and 286 of the PRC Criminal Law and Article 27 of the PRC Cybersecurity Law by launching malicious high-concurrency requests, DDoS, or disrupting learning platforms;
+- Violating institutional academic regulations, exam integrity, or student disciplinary rules;
+- Commercializing, reselling, or providing paid "proxy study" services using this software;
+- Reverse-engineering, tampering, or injecting malware into this software for distribution.
+
+4. Privacy & Local Storage:
+This software operates entirely client-side without central telemetry servers. User credentials are encrypted locally on the device using Android KeyStore hardware-backed AES-256-GCM encryption. The user bears all responsibility for device security.
+
+5. Third-Party Rights & Intellectual Property:
+SuperStar (ChaoXing) trademarks and platform copyrights belong to Beijing Century ChaoXing Information Technology Co., Ltd. This is an independent open-source tool without official affiliation, endorsement, or partnership.
+
+6. Disclaimer of Warranties & Limitation of Liability:
+The software is provided "AS-IS" without warranty of any kind. Users assume all direct, indirect, and disciplinary risks resulting from its usage (including account suspension, grade revocation, academic penalties, or legal liabilities). The developers shall not be liable for any user misconduct.
+
+7. Acceptance & Effectiveness:
+Ticking agreement on the login interface constitutes a legally binding acknowledgment between the user and developers. Discontinuing use and uninstalling is required if you disagree with any terms."""
+
     fun loginButton(lang: String): String =
         if (lang == "zh") "登录并进入控制台" else "Log In to Dashboard"
 

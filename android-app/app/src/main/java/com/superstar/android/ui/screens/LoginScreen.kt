@@ -1,5 +1,6 @@
 package com.superstar.android.ui.screens
 
+import android.widget.Toast
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -65,6 +66,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
@@ -89,8 +91,10 @@ fun LoginScreen(
     viewModel: MainViewModel,
     onLoginSuccess: () -> Unit
 ) {
+    val context = LocalContext.current
     val loginState by viewModel.loginState.collectAsState()
     val autoLogin by viewModel.autoLogin.collectAsState()
+    val legalAgreed by viewModel.legalAgreed.collectAsState()
     val userManuallyLoggedOut by viewModel.userManuallyLoggedOut.collectAsState()
     val currentLang by viewModel.currentLanguage.collectAsState()
 
@@ -98,6 +102,7 @@ fun LoginScreen(
     var password by remember { mutableStateOf("") }
     var passwordVisible by remember { mutableStateOf(false) }
     var autoLoginAttempted by remember { mutableStateOf(false) }
+    var showLegalDialog by remember { mutableStateOf(false) }
 
     // 展开动画状态与点击坐标
     var buttonCenter by remember { mutableStateOf(Offset.Zero) }
@@ -134,8 +139,8 @@ fun LoginScreen(
             password = savedPassword
         }
 
-        // 仅在明确勾选了【自动登录】且非手动登出的情况下，启动时才静默自动登录一次！
-        if (autoLogin && !userManuallyLoggedOut && !autoLoginAttempted &&
+        // 仅在明确勾选了【自动登录】且【已同意法律声明】且非手动登出的情况下，启动时才静默自动登录一次！
+        if (autoLogin && legalAgreed && !userManuallyLoggedOut && !autoLoginAttempted &&
             !savedUsername.isNullOrBlank() && !savedPassword.isNullOrBlank() &&
             !loginState.isLoggedIn && !loginState.isLoading
         ) {
@@ -367,6 +372,11 @@ fun LoginScreen(
                             ),
                             keyboardActions = KeyboardActions(
                                 onDone = {
+                                    if (!legalAgreed) {
+                                        Toast.makeText(context, AppStrings.legalAgreementRequired(currentLang), Toast.LENGTH_SHORT).show()
+                                        showLegalDialog = true
+                                        return@KeyboardActions
+                                    }
                                     if (username.isNotBlank() && password.isNotBlank() && !loginState.isLoading) {
                                         viewModel.login(username, password)
                                     }
@@ -405,11 +415,50 @@ fun LoginScreen(
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(20.dp))
+                        // 法律合规与用户协议勾选栏（依据中华人民共和国法律法规，必须勾选同意方可登录）
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(MaterialTheme.shapes.small)
+                                .clickable { viewModel.setLegalAgreed(!legalAgreed) }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = legalAgreed,
+                                onCheckedChange = { viewModel.setLegalAgreed(it) },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = MaterialTheme.colorScheme.primary,
+                                    uncheckedColor = MaterialTheme.colorScheme.outline
+                                )
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = AppStrings.legalCheckboxPrefix(currentLang),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = AppStrings.legalTermsTitle(currentLang),
+                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.clickable { showLegalDialog = true }
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(16.dp))
 
                         // 登录按钮（记录其中心坐标，驱动圆形揭示全屏过渡动画）
                         Button(
-                            onClick = { viewModel.login(username, password) },
+                            onClick = {
+                                if (!legalAgreed) {
+                                    Toast.makeText(context, AppStrings.legalAgreementRequired(currentLang), Toast.LENGTH_SHORT).show()
+                                    showLegalDialog = true
+                                    return@Button
+                                }
+                                viewModel.login(username, password)
+                            },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(52.dp)
@@ -562,6 +611,15 @@ fun LoginScreen(
                     )
                 }
             }
+        }
+
+        // 法律合规与免责声明全景弹窗
+        if (showLegalDialog) {
+            LegalNoticeDialog(
+                currentLang = currentLang,
+                onDismiss = { showLegalDialog = false },
+                onAgree = { viewModel.setLegalAgreed(true) }
+            )
         }
     }
 }

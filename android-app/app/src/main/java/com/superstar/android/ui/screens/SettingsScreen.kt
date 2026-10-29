@@ -37,8 +37,10 @@ import androidx.compose.material.icons.outlined.Code
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.DeleteSweep
 import androidx.compose.material.icons.outlined.Description
+import androidx.compose.material.icons.outlined.Gavel
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Policy
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
@@ -102,6 +104,7 @@ fun SettingsScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
     var isLogsExpanded by remember { mutableStateOf(true) }
+    var showLegalDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(logs.size) {
         if (logs.isNotEmpty() && !listState.isScrollInProgress) {
@@ -396,7 +399,60 @@ fun SettingsScreen(
                 }
             }
 
-            // 4. 当前账号与退出登录
+            // 4. 法律合规与用户免责声明 (基于中华人民共和国法律)
+            item(key = "legal_card", contentType = "card") {
+                ElevatedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.elevatedCardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Outlined.Gavel,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = AppStrings.settingsLegalCardTitle(currentLang),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = AppStrings.settingsLegalCardSubtitle(currentLang),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(14.dp))
+                        FilledTonalButton(
+                            onClick = { showLegalDialog = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Policy,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = AppStrings.settingsLegalCardBtn(currentLang),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 5. 当前账号与退出登录
             item(key = "account_card", contentType = "card") {
                 OutlinedCard(
                     modifier = Modifier.fillMaxWidth(),
@@ -459,6 +515,14 @@ fun SettingsScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
+    }
+
+    // 法律合规与免责声明全景弹窗
+    if (showLegalDialog) {
+        LegalNoticeDialog(
+            currentLang = currentLang,
+            onDismiss = { showLegalDialog = false }
+        )
     }
 }
 

@@ -36,6 +36,7 @@ private val PASSWORD_KEY = stringPreferencesKey("saved_password")
 private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config")
 private val LANGUAGE_KEY = stringPreferencesKey("app_language")
 private val AUTO_LOGIN_KEY = booleanPreferencesKey("auto_login")
+private val LEGAL_AGREED_KEY = booleanPreferencesKey("legal_agreed")
 private fun getUserLlmKey(username: String) = stringPreferencesKey("llm_config_${username.trim()}")
 private fun getUserCourseIdsKey(username: String) = stringPreferencesKey("course_ids_${username.trim()}")
 
@@ -88,6 +89,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // 自动登录勾选状态 (默认不勾选 false)
     private val _autoLogin = MutableStateFlow(false)
     val autoLogin: StateFlow<Boolean> = _autoLogin.asStateFlow()
+
+    // 法律合规与用户使用协议勾选状态 (基于中华人民共和国法律，必须显式同意)
+    private val _legalAgreed = MutableStateFlow(false)
+    val legalAgreed: StateFlow<Boolean> = _legalAgreed.asStateFlow()
+
+    fun setLegalAgreed(agreed: Boolean) {
+        _legalAgreed.value = agreed
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    prefs[LEGAL_AGREED_KEY] = agreed
+                }
+            } catch (_: Exception) {}
+        }
+    }
 
     // 大模型连通性独立测试状态（不写入日志，直接在 UI 板块变色反馈）
     private val _llmTestState = MutableStateFlow<LlmTestState>(LlmTestState.Idle)
@@ -263,8 +280,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val savedPassword = CryptoSecurityHelper.decrypt(savedPasswordRaw)
                 val savedLanguage = data[LANGUAGE_KEY] ?: "zh"
                 val savedAutoLogin = data[AUTO_LOGIN_KEY] ?: false
+                val savedLegalAgreed = data[LEGAL_AGREED_KEY] ?: false
                 _currentLanguage.value = savedLanguage
                 _autoLogin.value = savedAutoLogin
+                _legalAgreed.value = savedLegalAgreed
 
                 // 历史明文凭证无缝迁移为硬件级 AES-GCM 加密存储
                 if (!savedUsername.isNullOrBlank() && !savedPassword.isNullOrBlank() &&
