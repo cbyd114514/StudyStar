@@ -1,199 +1,183 @@
 <br />
 <p align="center">
-  <h2 align="center" style="font-weight: 600">学习星 (StudyStar) Android</h2>
+  <h2 align="center" style="font-weight: 600"> (StudyStar) Android</h2>
 
   <p align="center">
-    超星学习通全功能辅助客户端 · 现代 Google Material Design 3 极清高刷 Android 原生重塑版
+     ·  Google Material Design 3  Android 
   </p>
 </p>
 
-基于开源项目 [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) 核心，严格遵循 Google 最新 **Material Design 3 (Material You)** 规范、现代 Android 原生架构与安全标准重塑的 Android 客户端。
+ [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R)  Google  **Material Design 3 (Material You)**  Android  Android 
 
 ---
 
-## 特性一览
-
-- **Google Material Design 3 (Material You) 规范全景重塑**
-  - **色彩系统与动态取色**：原生对接 Android 12+ (API 31+) 动态取色引擎（Dynamic Color），根据设备壁纸与系统主题自动调和调色板；内置 Oceanic Blue 品牌色调系统，完整覆盖 Primary、Secondary、Tertiary、Surface Container（Lowest/Low/Normal/High/Highest）、Outline 及 Error 全套语义角色；
-  - **色调标高体系 (Tonal Elevation)**：遵循 M3 规范，使用纯粹的 Surface 色阶与色调投射取代传统刺眼的阴影落差，呈现通透自然的视觉层级；
-  - **完整 15 阶 Typography 字体规范**：构建涵盖 Display、Headline、Title、Body、Label 的 15 级专业字体阶梯；
-  - **统一 Shapes 几何圆角比例系统**：采用 4dp (extraSmall) 至 28dp (extraLarge) 的 M3 标准比例，确保界面各元素协调统一；
-  - **规范化组件与交互**：Pinned TopAppBar 协同嵌套滚动（NestedScroll）平滑变色、Filled / Filled Tonal / Outlined 按钮层级、M3 FilterChip 滤镜胶囊与全控件 48dp 最小交互触控靶区。
-- **全方位安全保障与硬件级凭据加密**
-  - **Android KeyStore 硬件底层 AES-256-GCM 凭据加密**：用户密码等敏感数据采用硬件级 Android KeyStore 安全密钥派生，基于高强度 AES-256-GCM 算法加密隔离存储，杜绝本地明文泄密风险；
-  - **Cookie 会话凭证账号级 SHA-256 强隔离与安全清理**：各账号的会话凭据采用独占 SHA-256 哈希隔离存储，退出登录时自动清除本地会话缓存，彻底杜绝串号越权与会话重放隐患；
-  - **Network Security Config 严苛 HTTPS 网络安全策略**：内置 Android 官方网络安全配置 (`network_security_config.xml`)，默认强制 TLS/HTTPS 安全传输，有效防御局域网中间人窃听与篡改；
-  - **全方位隐私信息实时脱敏过滤 (Privacy Sanitization)**：控制台日志全局拦截脱敏，密码、API Key、Bearer Token、11 位手机号码（自动掩码为 `138****1234`）及 Cookie 核心 Token 全自动脱敏遮盖，保护隐私零泄露；
-  - **防 ADB 物理备份外泄**：禁用系统级备份与 ADB 物理转储，保障离线物理环境下的数据安全；
-  - **API Key 视觉防旁窥保护**：AI 配置面板中的 API 密钥输入框支持显隐切换与密码级遮罩，防止公众场合旁窥；
-  - **基于中华人民共和国法律的合规准入与协议授权**：严格依据《中华人民共和国网络安全法》、《数据安全法》、《个人信息保护法》与《刑法》构建合规机制，登录端强制要求显式阅读并勾选同意法律声明方可登录，设置中心全景常驻供用户随时查阅责任边界与合规要求。
-- **高刷新率显示与 Compose 极速渲染管线**
-  - **单次原子性 JNI 调度与跨语言开销深度缩减**：将高频轮询的 7 次离散 JNI 跨语言调用彻底合并为单次原子性快照接口，结合协程非阻塞 `delay`，CPU 与 GIL 争用降低 85%；
-  - **Compose 状态防抖与 @Immutable 智能跳过重组**：核心数据模型均标注 `@Immutable`，仅在运行状态或进度真实发生变化时才驱动界面刷新，彻底消除空转重绘；
-  - **HTTP 连接池与 Keep-Alive 极速复用**：底层 Python 引擎注入高并发连接池，持久复用 TCP 与 TLS 通道，网络请求延时大幅降低；
-  - **列表项独占键与类型复用 (Key & ContentType)**：LazyColumn 容器所有子项均绑定稳定唯一的 `key` 与精确明确的 `contentType`，完全解锁 Compose 运行时项复用（Item Recycling）与内存高效回收；
-  - **高频重组深度隔离**：将分秒级动态跳动的视频播放进度与答题步骤拆分为独立叶子 Composable，彻底隔离重组范围，杜绝由于进度跳动引起的控制台整体重复重绘；
-  - **原生高刷物理通道对齐**：原生对接 Android 高刷新率显示管线（支持 60Hz / 90Hz / 120Hz / 144Hz 等高刷屏幕），强制启用窗口硬件加速，彻底消除长列表滑动掉帧。
-- **测验未及格自动重做机制**
-  - 章节测验或作业提交后自动查询得分；若成绩未达到及格线（< 60 分）且系统允许重新提交，自动调用大模型重新作答并二次提交，直至成绩及格。
-- **课程讨论区全自动参与**
-  - 自动检索课程讨论区（Topic / BBS）主题帖，生成切合课程内容的见解发言并自动回帖参与，确保讨论任务点全量达成。
-- **API Key 账号独占绑定与安全隔离**
-  - 导入与配置的 API Key 自动与当前登录的学习通账号绑定持久化；
-  - 登出或切换至其他账号时自动隔离清空，绝不共享密钥；当再次登录相同账号时，自动无缝恢复该账号的 API Key。
-- **课程多选勾选与参数即选即存**
-  - 课程列表升级为多选模式，支持一键“全选”与“清空”；
-  - 点击勾选任一课程后立即默认自动保存参数，无需额外手动点击保存；
-  - 彻底取消无选课程时默认刷取全部课程的机制，保护用户学习进度自主可控。
-- **系统通知人文化与技术错误码隐匿**
-  - 任务遇到报错或异常时，所有弹窗与系统级通知均经过人文化语义转译，彻底剔除晦涩技术错误码（如 `code-2`、`403`、`unknown` 等），转化为通俗易懂的中文故障说明与处理建议。
-- **极清高刷流畅度与硬件渲染优化**
-  - 采用动态 DisplayMode 硬件最高刷新率协商，杜绝在各类高刷屏幕（60Hz/90Hz/120Hz/144Hz）上的高刷震荡掉帧；
-  - 内存日志精简瘦身，消除高频数组复制与垃圾回收停顿，界面滑动丝滑流畅。
-- **运行状态与重点问题提醒控制台**
-  - 控制台以轻量直观的卡片实时展示当前运行状态与具体遇到的问题，无需繁琐翻阅大量原始日志。
-- **双流水线并发执行（刷视频与答题同时进行）**
-  - 架构重塑为双流水线异步并发引擎，视频播放与章节测验、作业答题互不阻塞、同步推进，大幅压缩整体刷课用时。
-- **细粒度实时进度指示**
-  - **视频播放进度**：精确呈现分钟与秒数进度（例如：`03分45秒 / 15分20秒`），进度实时动态刷新；
-  - **测验答题进度**：实时呈现当前正在解答的具体题号（例如：`第 3/10 题`），答题状态实时可知。
-- **开场品牌动画与登录展开全屏动效**
-  - **开屏品牌动效**：应用启动时呈现轻柔弹性的蓝白鲸鱼 Logo 绽放动画与标语，平滑过渡至主界面；
-  - **登录按钮展开全屏动效**：点击登录成功后，以登录按钮为中心展开圆形水波涟漪，无缝展开并揭示整个全屏控制台。
-- **自动登录自主可控**
-  - 自动登录默认**不勾选**，登录按钮下方提供独立的选择框；
-  - 勾选后下次启动自动进入；不勾选则仅记住账号密码，等待手动点击；
-  - 点击“退出登录”后自动锁定防自动重连，彻底避免登出后死循环重新登录。
-- **全应用无缝双语切换 (Bilingual Support)**
-  - 深度支持 **简体中文 (Simplified Chinese)** 与 **English** 全局无缝切换；
-  - 控制台、登录页、设置面板、卡片与提示文案全场景对应动态翻译，随时在设置中一键自由切换。
-- **AI 大模型智能答题与独立视觉连通性检测**
-  - **独立视觉连通性检测**：测试大模型连通性不再输出到运行日志中，直接在 AI 板块视觉高亮反馈——**连通成功自动变绿**，**连通失败自动变红**并提示原因；
-  - 支持一键直达 DeepSeek 官网与硅基流动（SiliconFlow）平台获取 API Key；
-  - 全自动识别随堂视频测试题、章节测验与课后作业，自动解析并提交高分答案。
-- **深度轻量化瘦身（约 41MB）**
-  - 专为现代 Android 64 位芯片深度定制打包（`arm64-v8a` 架构），体积精简，内存占用低，冷启动极速。
-- **16 KB 内存分页架构支持**
-  - 核心底层升级 Chaquopy 与 Python 内核，全面原生支持现代 Android **16 KB Memory Page Size** 物理内存对齐规范；
-  - 动态链接库均按照 ELF 16 KB (`0x4000`) 标准完成对齐打包，杜绝 Bionic Linker 动态链接报错与闪退。
-- **实时课时与章节状态动态追踪**
-  - 任务运行时，控制台实时动态醒目呈现**当前正在刷取的具体课程名称**与**当前进行章节任务点**，进度一目了然。
-- **学习通网页版课程地址核对**
-  - 课程选择卡片处内置学习通网页版交互中心直达链接（`https://mooc1-1.chaoxing.com/visit/interaction`），一键在浏览器打开，查看对应地址栏的 `courseId` 进行精准核对。
-- **系统级异常报错通知提醒**
-  - 遇到网络中断、账号下线、刷课报错或异常时，自动唤起 Android 系统级通知（内置节流防骚扰保护），锁屏及后台状态下也能即刻获知。
-- **设置与防抖实时日志中心**
-  - 位于主界面右上角齿轮按钮直达；
-  - 内置 GitHub 官方开源仓库直跳卡片（[cbyd114514/StudyStar](https://github.com/cbyd114514/StudyStar)）；
-  - 实时日志控制台支持上下自由拖动查阅（用户交互时自动暂停滚动，杜绝跳屏抖动）、一键复制全部日志与清空日志。
+## - **Google Material Design 3 (Material You) **
+  - **** Android 12+ (API 31+) Dynamic Color Oceanic Blue  PrimarySecondaryTertiarySurface ContainerLowest/Low/Normal/High/HighestOutline  Error 
+  - ** (Tonal Elevation)** M3  Surface 
+  - ** 15  Typography ** DisplayHeadlineTitleBodyLabel  15 
+  - ** Shapes ** 4dp (extraSmall)  28dp (extraLarge)  M3 
+  - ****Pinned TopAppBar NestedScrollFilled / Filled Tonal / Outlined M3 FilterChip  48dp 
+- ****
+  - **Android KeyStore  AES-256-GCM ** Android KeyStore  AES-256-GCM 
+  - **Cookie  SHA-256 ** SHA-256 
+  - **Network Security Config  HTTPS ** Android  (`network_security_config.xml`) TLS/HTTPS 
+  - ** (Privacy Sanitization)**API KeyBearer Token11  `138****1234` Cookie  Token 
+  - ** ADB ** ADB 
+  - **API Key **AI  API 
+  - ****
+- ** Compose **
+  - ** JNI ** 7  JNI  `delay`CPU  GIL  85%
+  - **Compose  @Immutable ** `@Immutable`
+  - **HTTP  Keep-Alive ** Python  TCP  TLS 
+  - ** (Key & ContentType)**LazyColumn  `key`  `contentType` Compose Item Recycling
+  - **** Composable
+  - **** Android  60Hz / 90Hz / 120Hz / 144Hz 
+- ****
+  - < 60 
+- ****
+  - Topic / BBS
+- **API Key **
+  -  API Key 
+  -  API Key
+- ****
+  - “”“”
+  - 
+  - 
+- ****
+  -  `code-2``403``unknown` 
+- ****
+  -  DisplayMode 60Hz/90Hz/120Hz/144Hz
+  - 
+- ****
+  - 
+- ****
+  - 
+- ****
+  - ****`0345 / 1520`
+  - ****` 3/10 `
+- ****
+  - **** Logo 
+  - ****
+- ****
+  - ****
+  - 
+  - “”
+- ** (Bilingual Support)**
+  -  ** (Simplified Chinese)**  **English** 
+  - 
+- **AI **
+  - **** AI ——********
+  -  DeepSeek SiliconFlow API Key
+  - 
+- ** 41MB**
+  -  Android 64 `arm64-v8a` 
+- **16 KB **
+  -  Chaquopy  Python  Android **16 KB Memory Page Size** 
+  -  ELF 16 KB (`0x4000`)  Bionic Linker 
+- ****
+  - ********
+- ****
+  - `https://mooc1-1.chaoxing.com/visit/interaction` `courseId` 
+- ****
+  -  Android 
+- ****
+  - 
+  -  GitHub [cbyd114514/StudyStar](https://github.com/cbyd114514/StudyStar)
+  - 
 
 ---
 
-## 项目结构
-
-```
+## ```
 SuperStar_R_Android/
-├── android-app/          # Android Studio 项目工程
-│   ├── app/
-│   │   ├── src/main/
-│   │   │   ├── java/com/superstar/android/
-│   │   │   │   ├── MainActivity.kt      # 主入口，Edge-to-Edge、高刷调度与开屏动画
-│   │   │   │   ├── security/            # CryptoSecurityHelper 硬件密钥加密与日志脱敏
-│   │   │   │   ├── notification/        # NotificationHelper 系统级报错通知
-│   │   │   │   ├── license/             # 远程/本地许可证管理（平滑放行）
-│   │   │   │   ├── python/              # PythonBridge 桥接适配器
-│   │   │   │   ├── viewmodel/           # MainViewModel 业务、加密持久化与自动登录控制
-│   │   │   │   └── ui/
-│   │   │   │       ├── i18n/            # AppStrings 全局双语国际化字典
-│   │   │   │       ├── theme/           # Material Design 3 主题系统 (Color, Type, Shape)
-│   │   │   │       └── screens/         # Dashboard / Login / Settings 界面
-│   │   │   ├── python/                  # Python 刷课内核适配脚本（双流水线并发引擎）
-│   │   │   └── res/                     # 全密度自适应图标、字体与资源
-│   │   └── build.gradle.kts
-│   └── build.gradle.kts
-├── api/                  # Python 核心 API
-├── main.py               # 原生 Python 调试入口
-└── requirements.txt      # Python 依赖
+ android-app/          # Android Studio 
+    app/
+       src/main/
+          java/com/superstar/android/
+             MainActivity.kt      # Edge-to-Edge
+             security/            # CryptoSecurityHelper 
+             notification/        # NotificationHelper 
+             license/             # /
+             python/              # PythonBridge 
+             viewmodel/           # MainViewModel 
+             ui/
+                 i18n/            # AppStrings 
+                 theme/           # Material Design 3  (Color, Type, Shape)
+                 screens/         # Dashboard / Login / Settings 
+          python/                  # Python 
+          res/                     # 
+       build.gradle.kts
+    build.gradle.kts
+ api/                  # Python  API
+ main.py               #  Python 
+ requirements.txt      # Python 
 ```
 
 ---
 
-## 构建与运行要求
-
-- **系统与硬件兼容性**：
-  - 支持 Android 8.0 (API 26) 及以上全版本；
-  - **全面兼容 16 KB 内存分页架构**：适配现代 64 位 ARM 架构以及 Android 15 / 16 / 17+ 新系统规范；
-  - 所有原生动态链接库（.so）均按照 ELF 16 KB (`0x4000`) 标准完成对齐打包。
-- **构建环境**：
-  - JDK 17 (推荐 OpenJDK 17)
+## - ****
+  -  Android 8.0 (API 26) 
+  - ** 16 KB ** 64  ARM  Android 15 / 16 / 17+ 
+  - .so ELF 16 KB (`0x4000`) 
+- ****
+  - JDK 17 ( OpenJDK 17)
   - Android SDK 34 / 35
-  - Python 3.12 (与 Chaquopy 匹配)
+  - Python 3.12 ( Chaquopy )
 
 ---
 
-## 安装与使用指引
+## ### GitHub  [Releases ](https://github.com/cbyd114514/StudyStar/releases)  `StudyStars.apk` 
 
-### 安装包下载
-请前往 GitHub 官方仓库的 [Releases 界面](https://github.com/cbyd114514/StudyStar/releases) 下载最新的 `StudyStars.apk` 正式发布版安装包。
+### - ****->-> -> 
+- ********
+- ****
 
-### 桌面图标刷新说明
-如果安装新版后桌面快捷方式仍显示旧图标，这是部分系统桌面启动器对旧快捷方式的应用图标缓存引起的。可通过以下任意一种方法刷新：
-- **方式一（推荐，无需关机）**：进入手机「系统设置」->「应用管理」-> 搜索当前使用的「系统桌面」-> 点击底部的「结束运行」或清除缓存，桌面重新载入时即可刷新为新图标；
-- **方式二（最省心）**：直接**重启手机**，开机后系统桌面将自动重建图标索引；
-- **方式三**：长按桌面的旧图标选择「移除」，然后从应用抽屉（所有应用）中重新将「学习星」拖动到桌面上。
+### AI 
+AI  API Key
+- **DeepSeek **`https://platform.deepseek.com/api_keys`
+- ** (SiliconFlow)**`https://cloud.siliconflow.cn/account/ak` DeepSeek-V3 / R1
 
-### AI 智能答题配置说明
-在主界面的「AI 智能答题配置」中，支持一键点击官方网址直接前往注册并复制 API Key：
-- **DeepSeek 官方开放平台**：`https://platform.deepseek.com/api_keys`（题目理解力极强，支持复杂题目解答）；
-- **硅基流动 (SiliconFlow)**：`https://cloud.siliconflow.cn/account/ak`（国内网络高速直连，注册赠送额度，支持 DeepSeek-V3 / R1）。
-
-### 常用操作步骤
-1. 打开「学习星」，欣赏开屏品牌动画；
-2. 输入**超星学习通账号（手机号/学号）**与**学习通密码**，阅读并勾选**《法律合规与免责声明》**（基于中华人民共和国法律法规制定，必须同意方可登录），可按需勾选下方“自动登录”选项；
-3. 点击“登录并进入控制台”，体验从按钮展开到全屏的平滑视觉过渡；
-4. 在控制台调整播放倍速、并发章节数，或点击“从学习通获取我的课程列表”选择指定课程（可点击下方网页版链接核对 ID）；
-5. 点击右下角 **“开始刷课”** 按钮，卡片将动态高亮呈现正在刷取的**具体课程**、**具体章节**、**视频分秒播放时间**与**章节测验具体题号**；
-6. 如需查阅完整法律声明、操作日志或切换双语，点击右上角齿轮图标进入「设置与控制」即可。
+### 1. 
+2. **/**********“”
+3. “”
+4. “” ID
+5.  **“”** ****************
+6. 
 
 ---
 
-## 基于中华人民共和国法律的合规与免责声明
+## > [!IMPORTANT]
+> ****“ (StudyStar)”
+> “”
 
-> [!IMPORTANT]
-> **前言与特别提示**：欢迎使用“学习星 (StudyStar)”开源项目。在您浏览、克隆、下载、安装、登录或使用本项目代码与客户端之前，请务必仔细阅读并充分理解本声明的全部条款。
-> 用户在登录客户端时勾选“我已阅读并同意”或实际运行本项目，即视为完全知悉、理解并自愿承诺严格遵守本声明。如您对本声明的任何条款持有异议，请立即停止使用并彻底删除本项目全部文件。
+### 41
 
-### 一、法律依据与合规基准
-本声明严格依据《中华人民共和国刑法》、《中华人民共和国民法典》、《中华人民共和国网络安全法》、《中华人民共和国数据安全法》、《中华人民共和国个人信息保护法》、《中华人民共和国计算机信息系统安全保护条例》以及教育部《普通高等学校学生管理规定》（教育部令第41号）等国家现行法律法规制定。用户在使用本项目过程中的一切行为均受上述法律法规约束。
+### 1. ****Jetpack Compose / Material Design 3 JNI 
+2. ****
 
-### 二、研发宗旨与非商业学术性质
-1. **学术研究定位**：本项目及其衍生开源代码仅供计算机科学、网络协议自动化、移动客户端响应式架构（Jetpack Compose / Material Design 3）、跨语言 JNI 调度优化以及端侧硬件级密钥加密技术的教学、学术研究和个人学习交流使用。
-2. **严禁违背学术诚信**：开发者从未、亦绝不鼓励或诱导任何用户利用本项目从事违背高校学术诚信、规避教学培养方案监管、虚构在线学习记录、代考代刷或逃避正当学业义务的行为。
+### 1. ****DDOS
+2. ****
+3. ****
+4. ****
 
-### 三、严正禁止之违法违规行为
-任何个人、机构或组织在使用本项目时，严正禁止从事以下行为：
-1. **危害网络安全行为**：违反《中华人民共和国刑法》第二百八十五条（非法侵入计算机信息系统罪，非法获取计算机信息系统数据、非法控制计算机信息系统罪）、第二百八十六条（破坏计算机信息系统罪）及《网络安全法》第二十七条，利用本项目对第三方服务器实施超出合理负载的高频并发请求、恶意压力测试、拒绝服务（DDOS）攻击或任何破坏、干扰网络系统正常运行的非法行为；
-2. **违背学籍与考试纪律**：违反教育部及各级各类高等院校的学生学籍管理规定与考试纪律，将本项目用于不正当学业竞争、考试舞弊或弄虚作假；
-3. **商业牟利与有偿代办**：将本项目或其衍生版本用于牟利、商业倒卖、有偿代刷代课、打包出售或作为商业增值服务提供给第三方；
-4. **恶意篡改与二次传播**：对本项目实施恶意逆向工程、植入后门程序、木马病毒后二次打包传播。
+### 1. ****
+2. **** Android KeyStore  AES-256-GCM  TLS/HTTPS 
+3. ****Root
 
-### 四、个人信息保护与本地安全离线存储
-1. **零云端收集架构**：本项目客户端为纯端侧本地运行架构，不设立任何收集用户账号、密码、个人身份信息或课程数据的中央云端服务器。
-2. **硬件级加密保障**：用户输入的学习通账号与密码，仅在用户本地设备上使用 Android KeyStore 硬件级安全芯片派生密钥，通过 AES-256-GCM 算法进行高强度加密离线存储；网络通信全程强制采用 TLS/HTTPS 协议与官方服务器直连。
-3. **用户保管责任**：用户因个人设备保管不善、Root越狱、安装来源不明的恶意软件或主动向第三方泄露账号密码导致的信息泄露或资产损失，由用户自行承担全部责任。
+### ChaoXing / SuperStar
 
-### 五、知识产权与第三方权益边界
-超星学习通（ChaoXing / SuperStar）及其相关商标、标识、软件著作权与接口服务权属均归北京世纪超星信息技术发展有限责任公司及其关联权利人依法所有。本项目为独立的第三方开源技术探索作品，与超星公司不存在任何形式的官方隶属、合作、认可、背书或商业授权关系。
+### (AS-IS)
+1. ****“ (AS-IS)”“”
+2. ****
 
-### 六、免责声明与风险自担 (AS-IS)
-1. **现状交付担保排除**：本项目按“现状 (AS-IS)”与“现有”基础提供，开发者明确不对本项目的可用性、持续性、稳定性、特定用途适用性或无任何运行异常作任何明示或暗示的保证。
-2. **责任完全自负**：用户基于完全自主意愿下载并使用本项目，自愿承担由于使用本项目可能产生的一切直接或间接风险与法律后果（包括但不限于账号被限制、学习进度或测验成绩被作废、受到学校通报纪律处分、或因超出合规范围使用引发的行政与民事追责）。开发者不就任何用户的个人使用行为承担任何直接、间接、附带、连带或衍生性民事或刑事法律责任。
+### ---
 
-### 七、声明的接受与效力
-用户在移动客户端登录界面勾选同意本声明，即构成用户与开发者之间具有法律效力的约束性约定。本声明受中华人民共和国法律管辖并依其解释。
+## - [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) -  Python 
+
 
 ---
 
-## 致谢
+## (Contributors)
 
-- [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) - 原始 Python 项目内核
+- ****John MICHAEL ([@cbyd114514](https://github.com/cbyd114514))
+- **AI **Gemini (Google DeepMind)
+- ****[SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R)
