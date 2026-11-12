@@ -5,7 +5,14 @@
   <p align="center">
     超星学习通全功能辅助引擎与现代 Google Material Design 3 极清高刷 Android 原生客户端
   </p>
+
+  <p align="center">
+    <a href="https://github.com/cbyd114514/StudyStar/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-v1.5.6-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载最新版 APK" /></a>
+  </p>
 </p>
+
+> [!TIP]
+> **最新版本发布页（Android APK 下载）**：**[https://github.com/cbyd114514/StudyStar/releases](https://github.com/cbyd114514/StudyStar/releases)**
 
 基于开源项目 [SuperStar_R](https://github.com/menghuanshiguang/SuperStar_R) 核心，融合 **Python 全自动任务引擎**（支持 CLI / Docker 运行）与严格遵循 Google **Material Design 3 (Material You)** 规范、现代 Android 原生架构及硬件安全标准的 **Jetpack Compose Android 客户端**。
 
