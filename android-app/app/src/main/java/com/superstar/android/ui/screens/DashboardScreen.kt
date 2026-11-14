@@ -96,6 +96,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.superstar.android.notification.NotificationHelper
 import com.superstar.android.ui.components.DeepSeekLoginDialog
+import com.superstar.android.ui.i18n.CourseTranslator
 import com.superstar.android.ui.components.ExpressiveFloatingDock
 import com.superstar.android.ui.components.ExpressiveUpdateDialog
 import com.superstar.android.ui.components.WavyProgressIndicator
@@ -130,6 +131,9 @@ fun DashboardScreen(
     val updateStatus by viewModel.updateStatus.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+    val enableVideo by viewModel.enableVideo.collectAsState()
+    val enableQuiz by viewModel.enableQuiz.collectAsState()
+    var showBatteryOptimizationDialog by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
     val isZh = currentLang == "zh"
@@ -467,7 +471,7 @@ fun DashboardScreen(
 
                                 if (studyState.currentCourse.isNotBlank()) {
                                     Text(
-                                        text = studyState.currentCourse,
+                                        text = CourseTranslator.translateCourse(studyState.currentCourse, currentLang),
                                         style = MaterialTheme.typography.labelMedium,
                                         fontWeight = FontWeight.SemiBold,
                                         color = MaterialTheme.colorScheme.onPrimaryContainer,
@@ -537,93 +541,119 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        // 视频播放任务点微卡片
+                        // 视频播放微卡片（带独立启用/跳过 Switch 开关）
                         Card(
                             modifier = Modifier.weight(1f),
                             shape = ShapeBentoCard,
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                                containerColor = if (enableVideo) MaterialTheme.colorScheme.surfaceContainerLow
+                                                 else MaterialTheme.colorScheme.surfaceContainerLowest
                             ),
                             elevation = CardDefaults.cardElevation(0.dp)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = ShapeSquircle,
-                                        color = MaterialTheme.colorScheme.primaryContainer,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.PlayCircleOutline,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = ShapeSquircle,
+                                            color = if (enableVideo) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.PlayCircleOutline,
+                                                    contentDescription = null,
+                                                    tint = if (enableVideo) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = AppStrings.videoSwitchLabel(currentLang),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (enableVideo) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                                        )
                                     }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = AppStrings.videoProgressLabel(currentLang),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                    Switch(
+                                        checked = enableVideo,
+                                        onCheckedChange = { viewModel.setEnableVideo(it) },
+                                        modifier = Modifier.size(36.dp, 20.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = studyState.videoProgress.ifBlank {
-                                        if (studyState.isRunning) (if (isZh) "任务点同步中" else "Syncing...") else (if (isZh) "待机" else "Idle")
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = if (!enableVideo) AppStrings.videoSkippedTip(currentLang)
+                                           else studyState.videoProgress.ifBlank {
+                                               if (studyState.isRunning) (if (isZh) "任务点同步中" else "Syncing...") else (if (isZh) "待机" else "Idle")
+                                           },
+                                    style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (enableVideo) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline
                                 )
                             }
                         }
 
-                        // DeepSeek 答题与测验微卡片
+                        // DeepSeek 答题与测验微卡片（带独立启用/跳过 Switch 开关）
                         Card(
                             modifier = Modifier.weight(1f),
                             shape = ShapeBentoCard,
                             colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                                containerColor = if (enableQuiz) MaterialTheme.colorScheme.surfaceContainerLow
+                                                 else MaterialTheme.colorScheme.surfaceContainerLowest
                             ),
                             elevation = CardDefaults.cardElevation(0.dp)
                         ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        shape = ShapeSquircle,
-                                        color = MaterialTheme.colorScheme.tertiaryContainer,
-                                        modifier = Modifier.size(32.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Outlined.Quiz,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.tertiary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                            Column(modifier = Modifier.padding(12.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            shape = ShapeSquircle,
+                                            color = if (enableQuiz) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                            modifier = Modifier.size(28.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    imageVector = Icons.Outlined.Quiz,
+                                                    contentDescription = null,
+                                                    tint = if (enableQuiz) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.outline,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
                                         }
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = AppStrings.quizSwitchLabel(currentLang),
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = if (enableQuiz) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline
+                                        )
                                     }
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = AppStrings.quizProgressLabel(currentLang),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                    Switch(
+                                        checked = enableQuiz,
+                                        onCheckedChange = { viewModel.setEnableQuiz(it) },
+                                        modifier = Modifier.size(36.dp, 20.dp)
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = studyState.quizProgress.ifBlank {
-                                        if (isLlmEnabled && manualApiKeyInput.isNotBlank()) (if (isZh) "DeepSeek 答题就绪" else "DeepSeek Ready")
-                                        else (if (isZh) "内置题库匹配" else "Built-in Solver")
-                                    },
-                                    style = MaterialTheme.typography.bodyMedium,
+                                    text = if (!enableQuiz) AppStrings.quizSkippedTip(currentLang)
+                                           else studyState.quizProgress.ifBlank {
+                                               if (isLlmEnabled && manualApiKeyInput.isNotBlank()) (if (isZh) "DeepSeek 答题就绪" else "DeepSeek Ready")
+                                               else (if (isZh) "内置题库匹配" else "Built-in Solver")
+                                           },
+                                    style = MaterialTheme.typography.bodySmall,
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (enableQuiz) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.outline
                                 )
                             }
                         }
@@ -845,7 +875,7 @@ fun DashboardScreen(
                                                 color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
                                             ) {
                                                 Text(
-                                                    text = title,
+                                                    text = CourseTranslator.translateCourse(title, currentLang),
                                                     style = MaterialTheme.typography.labelSmall,
                                                     color = MaterialTheme.colorScheme.onPrimaryContainer,
                                                     fontWeight = FontWeight.SemiBold,
@@ -955,7 +985,7 @@ fun DashboardScreen(
                                                     Spacer(modifier = Modifier.width(6.dp))
                                                     Column(modifier = Modifier.weight(1f)) {
                                                         Text(
-                                                            text = course.title,
+                                                            text = CourseTranslator.translateCourse(course.title, currentLang),
                                                             style = MaterialTheme.typography.bodyMedium,
                                                             fontWeight = FontWeight.SemiBold,
                                                             color = MaterialTheme.colorScheme.onSurface
@@ -976,7 +1006,7 @@ fun DashboardScreen(
                     }
                 }
 
-                // --- 5. 核心参数调节卡片（支持点击数字弹窗精确编辑） ---
+                // --- 5. 刷课参数配置板块 (压缩排成一排，高度小巧精致) ---
                 item(key = "config_card", contentType = "card") {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -986,62 +1016,120 @@ fun DashboardScreen(
                         ),
                         elevation = CardDefaults.cardElevation(0.dp)
                     ) {
-                        Column(
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp)
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Tune,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.coreParams(currentLang),
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                            // 播放倍速微模块（点击数字弹窗编辑）
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        tempSpeedInput = String.format("%.1f", configSpeed)
+                                        showEditSpeedDialog = true
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.primaryContainer,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Speed,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = AppStrings.playSpeed(currentLang),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = "${String.format("%.1f", configSpeed)}x",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Edit",
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                }
                             }
 
-                            Spacer(modifier = Modifier.height(16.dp))
-
-                            // 播放倍速调节（点击数字胶囊弹出精确输入）
-                            EditableSliderRow(
-                                icon = Icons.Outlined.Speed,
-                                label = AppStrings.playSpeed(currentLang),
-                                value = configSpeed,
-                                valueDisplay = "${String.format("%.1f", configSpeed)}x",
-                                valueRange = 0.5f..3.0f,
-                                steps = 25,
-                                onValueChange = { configSpeed = it },
-                                onValueChangeFinished = { autoSaveCoreConfig(speed = configSpeed) },
-                                onNumberClick = {
-                                    tempSpeedInput = String.format("%.1f", configSpeed)
-                                    showEditSpeedDialog = true
+                            // 并发章节微模块（点击数字弹窗编辑）
+                            Surface(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .clickable {
+                                        tempJobsInput = configJobs.toString()
+                                        showEditJobsDialog = true
+                                    },
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surface
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Outlined.Layers,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = AppStrings.concurrencyJobs(currentLang),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontSize = 11.sp
+                                        )
+                                        Text(
+                                            text = AppStrings.jobsUnit(currentLang, configJobs),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                    Icon(
+                                        imageVector = Icons.Outlined.Edit,
+                                        contentDescription = "Edit",
+                                        tint = MaterialTheme.colorScheme.outline,
+                                        modifier = Modifier.size(13.dp)
+                                    )
                                 }
-                            )
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            // 并发数调节（点击数字胶囊弹出精确输入）
-                            EditableSliderRow(
-                                icon = Icons.Outlined.Layers,
-                                label = AppStrings.concurrencyJobs(currentLang),
-                                value = configJobs.toFloat(),
-                                valueDisplay = AppStrings.jobsUnit(currentLang, configJobs),
-                                valueRange = 1f..8f,
-                                steps = 7,
-                                onValueChange = { configJobs = it.toInt() },
-                                onValueChangeFinished = { autoSaveCoreConfig(jobs = configJobs) },
-                                onNumberClick = {
-                                    tempJobsInput = configJobs.toString()
-                                    showEditJobsDialog = true
-                                }
-                            )
+                            }
                         }
                     }
                 }
@@ -1273,6 +1361,9 @@ fun DashboardScreen(
                 if (studyState.isRunning) {
                     viewModel.stopStudy()
                 } else {
+                    if (!viewModel.isBatteryOptimizationIgnored(context)) {
+                        showBatteryOptimizationDialog = true
+                    }
                     viewModel.startStudy(
                         courseIds = configCourseIds.ifBlank { null },
                         speed = configSpeed.toDouble(),
@@ -1286,6 +1377,31 @@ fun DashboardScreen(
             },
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // --- 电池无限制后台运行引导 Dialog ---
+        if (showBatteryOptimizationDialog) {
+            AlertDialog(
+                onDismissRequest = { showBatteryOptimizationDialog = false },
+                title = { Text(AppStrings.batteryOptimizationDialogTitle(currentLang), fontWeight = FontWeight.Bold) },
+                text = { Text(AppStrings.batteryOptimizationDialogMsg(currentLang), style = MaterialTheme.typography.bodyMedium) },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showBatteryOptimizationDialog = false
+                            viewModel.requestIgnoreBatteryOptimization(context)
+                        },
+                        shape = ShapePill
+                    ) {
+                        Text(AppStrings.batteryOptimizationDialogGo(currentLang), fontWeight = FontWeight.Bold)
+                    }
+                },
+                dismissButton = {
+                    OutlinedButton(onClick = { showBatteryOptimizationDialog = false }, shape = ShapePill) {
+                        Text(AppStrings.cancelBtn(currentLang))
+                    }
+                }
+            )
+        }
 
         // --- 8. DeepSeek 网页免填 API 登录抓取 Dialog ---
         if (showDeepSeekLoginDialog) {

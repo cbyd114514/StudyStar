@@ -1206,7 +1206,16 @@ class AndroidStudyEngine:
             self.log(f"[视频] 任务瞬间完成: {video_name}")
             return StudyResult.SUCCESS
 
+        start_wall_time = time.time()
+        start_play_time = float(play_time)
+        wait_time = int(random.uniform(25, 60))
+        last_log_time = play_time
+
         while not passed:
+            elapsed_real = time.time() - start_wall_time
+            play_time = min(duration, start_play_time + elapsed_real * _speed)
+            set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
+
             # 当播放时间达到上报间隔或等于总时长时上报进度
             if play_time - last_log_time >= wait_time or play_time >= duration:
                 passed, state = self.video_progress_log(_course, _job, _job_info, _dtoken, duration,
@@ -1227,6 +1236,8 @@ class AndroidStudyEngine:
                             play_time = int(refreshed.get("playTime", play_time))
                             set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
                             self.log(f"[视频] 刷新token成功: dtoken={_dtoken}")
+                            start_wall_time = time.time()
+                            start_play_time = float(play_time)
                             continue
                     except Exception:
                         self.log("[视频] 刷新视频状态失败")
@@ -1235,15 +1246,15 @@ class AndroidStudyEngine:
                 elif not passed and state != 200:
                     return StudyResult.ERROR
 
-                wait_time = int(random.uniform(30, 90))
+                wait_time = int(random.uniform(25, 60))
                 last_log_time = play_time
+                start_wall_time = time.time()
+                start_play_time = float(play_time)
 
-            dt = (time.time() - last_iter) * _speed
-            last_iter = time.time()
-            play_time = min(duration, play_time + dt)
-            set_current_video(video_name, format_time_mmss(play_time), format_time_mmss(duration))
+            if play_time >= duration:
+                break
 
-            time.sleep(1)
+            time.sleep(0.5)
 
         set_current_video(video_name, format_time_mmss(duration), format_time_mmss(duration))
         self.log(f"[视频] 任务完成: {video_name}")
@@ -2768,7 +2779,7 @@ class AndroidStudyEngine:
         """
         self._process_chapter_internal(course, point, speed)
 
-    def process_course(self, course, speed):
+    def process_course(self, course, speed, enable_video=True, enable_quiz=True):
         """
         处理单个课程的所有章节：
         刷视频流水线与答题流水线同时进行（并发处理），
@@ -2890,18 +2901,33 @@ class AndroidStudyEngine:
                     self.log(f"[其他任务] 异常: {e}")
                 _record_done()
 
-        # 并发启动视频流水线、答题流水线与其他任务流水线（同时进行）
-        v_thread = threading.Thread(target=_run_video_pipeline, daemon=True)
-        q_thread = threading.Thread(target=_run_quiz_pipeline, daemon=True)
-        o_thread = threading.Thread(target=_run_other_pipeline, daemon=True)
+        # 并发启动流水线，支持视频与答题独立按需开关
+        pipeline_threads = []
+        if enable_video and video_tasks:
+            v_thread = threading.Thread(target=_run_video_pipeline, daemon=True)
+            pipeline_threads.append(v_thread)
+            v_thread.start()
+        else:
+            if not enable_video:
+                self.log("[配置] 视频播放开关为关闭状态，已跳过视频流水线")
+            clear_current_video()
 
-        v_thread.start()
-        q_thread.start()
-        o_thread.start()
+        if enable_quiz and quiz_tasks:
+            q_thread = threading.Thread(target=_run_quiz_pipeline, daemon=True)
+            pipeline_threads.append(q_thread)
+            q_thread.start()
+        else:
+            if not enable_quiz:
+                self.log("[配置] 测验应答开关为关闭状态，已跳过测验答题流水线")
+            clear_current_quiz()
 
-        v_thread.join()
-        q_thread.join()
-        o_thread.join()
+        if other_tasks:
+            o_thread = threading.Thread(target=_run_other_pipeline, daemon=True)
+            pipeline_threads.append(o_thread)
+            o_thread.start()
+
+        for t in pipeline_threads:
+            t.join()
 
         # 自动参与课程讨论区
         if self._running:
@@ -2921,7 +2947,7 @@ class AndroidStudyEngine:
             pass
         self.log(f"课程学习完成: {course_name}")
 
-    def run(self, course_ids=None, speed=1.0, jobs=4):
+    def run(self, course_ids=None, speed=1.0, jobs=4, enable_video=True, enable_quiz=True):
         """
         运行刷课任务
         与参考实现一致：先登录，获取课程列表，过滤，然后逐个处理
@@ -2965,7 +2991,7 @@ class AndroidStudyEngine:
                 self.log("刷课任务被用户停止")
                 stopped = True
                 break
-            self.process_course(course, speed)
+            self.process_course(course, speed, enable_video=enable_video, enable_quiz=enable_quiz)
 
         self._running = False
         self.log("===== 刷课任务完成 =====")
@@ -3022,7 +3048,7 @@ def set_study_progress(progress):
 
 # ==================== 后台任务入口 ====================
 def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
-                    llm_config="", courses_json=""):
+                    llm_config="", courses_json="", enable_video=True, enable_quiz=True):
     """
     在后台线程中执行刷课任务
     与参考实现 start_study 逻辑一致
@@ -3041,7 +3067,7 @@ def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
 
         engine = AndroidStudyEngine(username, password, llm_config=llm_config)
         engine.on_progress = set_study_progress
-        run_res = engine.run(course_ids=course_ids, speed=speed, jobs=jobs)
+        run_res = engine.run(course_ids=course_ids, speed=speed, jobs=jobs, enable_video=enable_video, enable_quiz=enable_quiz)
         if run_res == "login_failed":
             _study_result = "login_failed"
         elif run_res == "no_courses":
@@ -3061,7 +3087,7 @@ def _run_study_task(username, password, course_ids=None, speed=1.0, jobs=4,
         _study_running = False
 
 
-def start_study(username, password, course_ids=None, speed=1.0, jobs=4, llm_config="", courses_json=""):
+def start_study(username, password, course_ids=None, speed=1.0, jobs=4, llm_config="", courses_json="", enable_video=True, enable_quiz=True):
     """
     启动刷课任务（在后台线程中运行）
     与参考实现一致：启动后台线程执行 _run_study_task
@@ -3089,7 +3115,8 @@ def start_study(username, password, course_ids=None, speed=1.0, jobs=4, llm_conf
         target=_run_study_task,
         args=(username, password),
         kwargs={"course_ids": course_ids, "speed": speed, "jobs": jobs,
-                "llm_config": llm_config, "courses_json": courses_json},
+                "llm_config": llm_config, "courses_json": courses_json,
+                "enable_video": enable_video, "enable_quiz": enable_quiz},
         daemon=True,
     )
     thread.start()

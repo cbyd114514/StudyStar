@@ -1,6 +1,9 @@
 package com.superstar.android.viewmodel
 
 import android.app.Application
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
@@ -41,6 +44,8 @@ private val LANGUAGE_KEY = stringPreferencesKey("app_language")
 private val AUTO_LOGIN_KEY = booleanPreferencesKey("auto_login")
 private val LEGAL_AGREED_KEY = booleanPreferencesKey("legal_agreed")
 private val AUTO_CHECK_UPDATE_KEY = booleanPreferencesKey("auto_check_update")
+private val ENABLE_VIDEO_KEY = booleanPreferencesKey("enable_video")
+private val ENABLE_QUIZ_KEY = booleanPreferencesKey("enable_quiz")
 private fun getUserLlmKey(username: String) = stringPreferencesKey("llm_config_${username.trim()}")
 private fun getUserLlmEnabledKey(username: String) = booleanPreferencesKey("llm_enabled_${username.trim()}")
 private fun getUserCourseIdsKey(username: String) = stringPreferencesKey("course_ids_${username.trim()}")
@@ -136,6 +141,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _autoCheckUpdate = MutableStateFlow(true)
     val autoCheckUpdate: StateFlow<Boolean> = _autoCheckUpdate.asStateFlow()
 
+    // 视频播放与测验应答独立开关（默认开启）
+    private val _enableVideo = MutableStateFlow(true)
+    val enableVideo: StateFlow<Boolean> = _enableVideo.asStateFlow()
+
+    private val _enableQuiz = MutableStateFlow(true)
+    val enableQuiz: StateFlow<Boolean> = _enableQuiz.asStateFlow()
+
+    fun setEnableVideo(enabled: Boolean) {
+        _enableVideo.value = enabled
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    prefs[ENABLE_VIDEO_KEY] = enabled
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    fun setEnableQuiz(enabled: Boolean) {
+        _enableQuiz.value = enabled
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    prefs[ENABLE_QUIZ_KEY] = enabled
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     fun setAutoCheckUpdate(enabled: Boolean) {
         _autoCheckUpdate.value = enabled
         viewModelScope.launch {
@@ -152,6 +188,59 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
      * 从网页成功抓取到 DeepSeek API Key 后一键配置生效
      * 锁定 Provider 为 DeepSeek，锁定极速模型 deepseek-chat，自动开启并执行连接测试
      */
+    /**
+     * 超星学习通官方授权登录成功回调处理
+     */
+    fun loginWithAuthCookies(cookies: String, username: String) {
+        viewModelScope.launch {
+            try {
+                _loginState.value = LoginState(
+                    isLoggedIn = true,
+                    username = username,
+                    password = "AUTH_LOGIN_COOKIES",
+                    savedUsername = username,
+                    savedPassword = "AUTH_LOGIN_COOKIES"
+                )
+                saveCredentials(username, "AUTH_LOGIN_COOKIES")
+                addLog("超星学习通官方授权登录成功，欢迎 $username", LogType.SUCCESS)
+                fetchCourses()
+            } catch (e: Exception) {
+                addLog("授权登录处理异常: ${e.message}", LogType.ERROR)
+            }
+        }
+    }
+
+    /**
+     * 电池优化检测与跳转引导
+     */
+    fun isBatteryOptimizationIgnored(context: Context): Boolean {
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            val pm = context.getSystemService(Context.POWER_SERVICE) as? android.os.PowerManager
+            pm?.isIgnoringBatteryOptimizations(context.packageName) ?: true
+        } else {
+            true
+        }
+    }
+
+    fun requestIgnoreBatteryOptimization(context: Context) {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+            try {
+                val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:${context.packageName}")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            } catch (_: Exception) {
+                try {
+                    val intent = Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
     fun applyDeepSeekApiKey(apiKey: String) {
         val cleanKey = apiKey.trim()
         if (cleanKey.isBlank()) return
@@ -469,6 +558,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 val savedAutoCheckUpdate = data[AUTO_CHECK_UPDATE_KEY] ?: true
+                val savedEnableVideo = data[ENABLE_VIDEO_KEY] ?: true
+                val savedEnableQuiz = data[ENABLE_QUIZ_KEY] ?: true
+                _enableVideo.value = savedEnableVideo
+                _enableQuiz.value = savedEnableQuiz
                 _autoCheckUpdate.value = savedAutoCheckUpdate
                 addLog("已加载保存的配置: 速度=${savedSpeed}x, 并发=${savedJobs}", LogType.INFO)
                 if (savedAutoCheckUpdate) {
@@ -672,6 +765,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 jobs = actualJobs,
                 llmConfig = actualLlmConfig,
                 coursesJson = coursesJson,
+                enableVideo = _enableVideo.value,
+                enableQuiz = _enableQuiz.value,
                 onLog = { msg -> addLog(msg) },
                 onProgress = { progress ->
                     if (_studyState.value.progress != progress) {

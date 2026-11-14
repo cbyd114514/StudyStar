@@ -203,6 +203,8 @@ object PythonBridge {
         jobs: Int = 4,
         llmConfig: String? = null,
         coursesJson: String? = null,
+        enableVideo: Boolean = true,
+        enableQuiz: Boolean = true,
         onLog: (String) -> Unit = {},
         onProgress: (Float) -> Unit = {},
         onStatusUpdate: (progress: Float, course: String, chapter: String, videoProgress: String, quizProgress: String) -> Unit = { _, _, _, _, _ -> },
@@ -213,7 +215,7 @@ object PythonBridge {
             val studyModule = py.getModule("android_study")
 
             onLog("正在初始化 Python 刷课引擎...")
-            onLog("参数: 速度=${speed}x, 并发数=$jobs")
+            onLog("参数: 速度=${speed}x, 并发数=$jobs, 视频=$enableVideo, 答题=$enableQuiz")
             if (!courseIds.isNullOrBlank()) {
                 onLog("指定课程ID: $courseIds")
             }
@@ -233,7 +235,9 @@ object PythonBridge {
                 speed,
                 jobs,
                 llmConfig ?: "",
-                coursesJson ?: ""
+                coursesJson ?: "",
+                enableVideo,
+                enableQuiz
             )
             val startResultStr = startResult?.toString() ?: "failed"
 

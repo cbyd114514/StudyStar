@@ -33,6 +33,8 @@ import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
+import androidx.compose.material.icons.outlined.Security
+import com.superstar.android.ui.components.ChaoXingLoginDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -43,6 +45,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -103,6 +106,7 @@ fun LoginScreen(
     var passwordVisible by remember { mutableStateOf(false) }
     var autoLoginAttempted by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
+    var showChaoXingAuthDialog by remember { mutableStateOf(false) }
 
     // 展开动画状态与点击坐标
     var buttonCenter by remember { mutableStateOf(Offset.Zero) }
@@ -286,30 +290,72 @@ fun LoginScreen(
 
                         Spacer(modifier = Modifier.height(20.dp))
 
-                        // 用户名输入
-                        OutlinedTextField(
-                            value = username,
-                            onValueChange = {
-                                username = it
-                                if (loginState.error != null) viewModel.clearLoginError()
-                            },
-                            label = { Text(AppStrings.usernameLabel(currentLang)) },
-                            placeholder = { Text(AppStrings.usernamePlaceholder(currentLang)) },
-                            leadingIcon = {
-                                Icon(
-                                    Icons.Outlined.AccountCircle,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
+                        // 紧凑型用户名输入框与紧随其后的小胶囊自动登录
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Text,
-                                imeAction = ImeAction.Next
-                            ),
-                            shape = ShapeBentoCard
-                        )
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = username,
+                                onValueChange = {
+                                    username = it
+                                    if (loginState.error != null) viewModel.clearLoginError()
+                                },
+                                label = { Text(AppStrings.usernameLabel(currentLang), fontSize = 12.sp) },
+                                placeholder = { Text(AppStrings.usernamePlaceholder(currentLang), fontSize = 12.sp) },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Outlined.AccountCircle,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                },
+                                modifier = Modifier.weight(1f),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next
+                                ),
+                                shape = RoundedCornerShape(14.dp)
+                            )
+
+                            Spacer(modifier = Modifier.width(8.dp))
+
+                            // 用户名后面的小封号/小复选“自动登录”
+                            Surface(
+                                shape = ShapePill,
+                                color = if (autoLogin) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                                        else MaterialTheme.colorScheme.surfaceContainerHighest,
+                                border = BorderStroke(1.dp, if (autoLogin) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                                modifier = Modifier
+                                    .clip(ShapePill)
+                                    .clickable { viewModel.setAutoLogin(!autoLogin) }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = autoLogin,
+                                        onCheckedChange = { viewModel.setAutoLogin(it) },
+                                        modifier = Modifier.size(16.dp),
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = MaterialTheme.colorScheme.primary,
+                                            uncheckedColor = MaterialTheme.colorScheme.outline
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (currentLang == "zh") "自动登录" else "Auto",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (autoLogin) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -403,32 +449,7 @@ fun LoginScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
-                                // 1. 自动登录行
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(ShapePill)
-                                        .clickable { viewModel.setAutoLogin(!autoLogin) },
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Checkbox(
-                                        checked = autoLogin,
-                                        onCheckedChange = { viewModel.setAutoLogin(it) },
-                                        colors = CheckboxDefaults.colors(
-                                            checkedColor = MaterialTheme.colorScheme.primary,
-                                            uncheckedColor = MaterialTheme.colorScheme.outline
-                                        )
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = AppStrings.autoLoginCheckbox(currentLang),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-
-                                // 2. 法律合规与免责声明行
+                                // 法律合规与免责声明严格要求行
                                 Row(
                                     modifier = Modifier
                                         .fillMaxWidth()
@@ -479,7 +500,7 @@ fun LoginScreen(
                             },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp)
+                                .height(48.dp)
                                 .onGloballyPositioned { coordinates ->
                                     val bounds = coordinates.boundsInRoot()
                                     buttonCenter = bounds.center
@@ -506,6 +527,36 @@ fun LoginScreen(
                                     fontWeight = FontWeight.Bold
                                 )
                             }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // 跳转超星学习通官方网页/客户端授权登录
+                        OutlinedButton(
+                            onClick = {
+                                if (!legalAgreed) {
+                                    Toast.makeText(context, AppStrings.legalAgreementRequired(currentLang), Toast.LENGTH_SHORT).show()
+                                    showLegalDialog = true
+                                    return@OutlinedButton
+                                }
+                                showChaoXingAuthDialog = true
+                            },
+                            shape = ShapePill,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(44.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Security,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = AppStrings.chaoxingAuthLoginBtn(currentLang),
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }
@@ -547,6 +598,17 @@ fun LoginScreen(
         }
 
         // 法律协议弹窗
+        if (showChaoXingAuthDialog) {
+            ChaoXingLoginDialog(
+                onDismiss = { showChaoXingAuthDialog = false },
+                onAuthSuccess = { cookies, uid ->
+                    showChaoXingAuthDialog = false
+                    viewModel.loginWithAuthCookies(cookies, uid)
+                },
+                isZh = currentLang == "zh"
+            )
+        }
+
         if (showLegalDialog) {
             LegalNoticeDialog(
                 currentLang = currentLang,

@@ -48,18 +48,18 @@ object AppUpdateManager {
     )
 
     /**
-     * 提取 45 字以内的通俗白话更新说明（严格过滤所有 Markdown 井号与星号符号）
+     * 提取 48 字以内的通俗白话更新说明（严格过滤所有 Markdown 井号与星号符号）
      */
     fun extractBriefChangelog(fullNotes: String): String {
-        val clean = fullNotes.replace(Regex("""[#*`\-_>\r\n]+"""), " ")
+        val clean = fullNotes.replace(Regex("""[#*`\-_~>\r\n]+"""), " ")
             .replace(Regex("""https?://\S+"""), "")
             .replace(Regex("""\s+"""), " ")
             .trim()
-        return if (clean.length > 45) clean.take(45) + "..." else clean.ifBlank { "包含多项界面优化与稳定性提升。" }
+        return if (clean.length > 48) clean.take(48) + "..." else clean.ifBlank { "包含多项界面优化与稳定性提升。" }
     }
 
     /**
-     * 格式化更新日志：彻底去除井号、星号、空标题与冗长技术术语，输出简明扼要的条目说明
+     * 格式化更新日志：彻底去除井号、星号、空标题与冗长技术术语，字数严格控制在 50 字以内
      */
     fun cleanAndFormatReleaseNotes(fullNotes: String, isZh: Boolean = true): String {
         if (fullNotes.isBlank()) {
@@ -72,8 +72,8 @@ object AppUpdateManager {
         for (rawLine in lines) {
             var line = rawLine.trim()
             // 剥离 Markdown 标题符 (#)、引用符 (>)、无序列表符 (*, -) 以及强调符 (**, `)
-            line = line.replace(Regex("""^[#>\s\-*•]+"""), "")
-                .replace(Regex("""[#*`_]+"""), "")
+            line = line.replace(Regex("""^[#>\s\-*•\d.]+"""), "")
+                .replace(Regex("""[#*`_~]+"""), "")
                 .trim()
 
             // 过滤空行、外链与无实质内容的标题
@@ -82,20 +82,21 @@ object AppUpdateManager {
             if (line.startsWith("http://") || line.startsWith("https://")) continue
 
             cleanItems.add(line)
-            if (cleanItems.size >= 5) break // 控制在 5 条核心条目内，言简意赅
+            if (cleanItems.size >= 3) break
         }
 
-        if (cleanItems.isEmpty()) {
-            val simple = fullNotes.replace(Regex("""[#*`\-_>\r\n]+"""), " ")
+        val combined = if (cleanItems.isNotEmpty()) {
+            cleanItems.joinToString("；")
+        } else {
+            fullNotes.replace(Regex("""[#*`\-_~>\r\n]+"""), " ")
                 .replace(Regex("""https?://\S+"""), "")
                 .replace(Regex("""\s+"""), " ")
                 .trim()
-            return if (simple.length > 80) simple.take(80) + "..." else simple.ifBlank {
-                if (isZh) "本次更新包含多项稳定性改进与界面优化。" else "Bug fixes and performance improvements."
-            }
         }
 
-        return cleanItems.joinToString("\n")
+        return if (combined.length > 48) combined.take(48) + "..." else combined.ifBlank {
+            if (isZh) "本次更新包含多项稳定性改进与界面优化。" else "Bug fixes and performance improvements."
+        }
     }
 
     sealed interface UpdateStatus {

@@ -54,6 +54,31 @@ object AppStrings {
 
     fun appName(lang: String): String = if (lang == "zh") "学习星" else "StudyStar"
 
+    fun chaoxingAuthLoginBtn(lang: String): String =
+        if (lang == "zh") "跳转学习通授权登录" else "ChaoXing OAuth Login"
+
+    fun videoSwitchLabel(lang: String): String =
+        if (lang == "zh") "视频学习" else "Video"
+
+    fun quizSwitchLabel(lang: String): String =
+        if (lang == "zh") "测验答题" else "Quiz"
+
+    fun videoSkippedTip(lang: String): String =
+        if (lang == "zh") "已跳过视频学习" else "Video playback skipped"
+
+    fun quizSkippedTip(lang: String): String =
+        if (lang == "zh") "已跳过测验答题" else "Quiz answering skipped"
+
+    fun batteryOptimizationDialogTitle(lang: String): String =
+        if (lang == "zh") "保持后台不中断运行" else "Unrestricted Background Running"
+
+    fun batteryOptimizationDialogMsg(lang: String): String =
+        if (lang == "zh") "为防止息屏后手机系统省电策略杀死刷课任务，建议将应用设置为【无限制后台运行】以保障持续刷课。"
+        else "To prevent the system from killing tasks while screen is off, please allow Unrestricted Background Running."
+
+    fun batteryOptimizationDialogGo(lang: String): String =
+        if (lang == "zh") "去开启无限制" else "Enable Unrestricted"
+
     // --- 登录页 Login ---
     fun loginSubtitle(lang: String): String =
         if (lang == "zh") "超星学习通全功能辅助客户端" else "SuperStar All-in-One Client"
