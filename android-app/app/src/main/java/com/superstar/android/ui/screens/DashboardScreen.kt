@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -252,13 +253,92 @@ fun DashboardScreen(
 
                         Spacer(modifier = Modifier.width(6.dp))
 
-                        // 设置齿轮按钮（平滑直接进入，彻底去除闪屏水波）
-                        IconButton(onClick = onOpenSettings) {
-                            Icon(
-                                imageVector = Icons.Outlined.Settings,
-                                contentDescription = AppStrings.settingsTooltip(currentLang),
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                        // 设置齿轮按钮：更新时右上角加小圈展示下载与安装进度，支持圆环动效
+                        val isDownloading = updateStatus is AppUpdateManager.UpdateStatus.Downloading
+                        val isInstalling = updateStatus is AppUpdateManager.UpdateStatus.Installing || updateStatus is AppUpdateManager.UpdateStatus.Downloaded
+
+                        Box(contentAlignment = Alignment.Center) {
+                            IconButton(
+                                onClick = {
+                                    if (isDownloading || isInstalling) {
+                                        viewModel.openUpdateDialog()
+                                    } else {
+                                        onOpenSettings()
+                                    }
+                                }
+                            ) {
+                                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(40.dp)) {
+                                    Icon(
+                                        imageVector = Icons.Outlined.Settings,
+                                        contentDescription = AppStrings.settingsTooltip(currentLang),
+                                        tint = if (isDownloading || isInstalling) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+
+                                    // 如果正在下载，外圈环绕圆环进度指示
+                                    if (isDownloading) {
+                                        CircularProgressIndicator(
+                                            progress = { downloadProgress },
+                                            modifier = Modifier.size(36.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            strokeWidth = 2.dp,
+                                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+                                        )
+                                    } else if (isInstalling) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(36.dp),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            strokeWidth = 2.dp
+                                        )
+                                    }
+                                }
+                            }
+
+                            // 齿轮右上角加一个小圈徽标，显示下载进度和安装进度
+                            if (isDownloading || isInstalling) {
+                                Surface(
+                                    shape = ShapePill,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)),
+                                    modifier = Modifier
+                                        .align(Alignment.TopEnd)
+                                        .offset(x = 6.dp, y = (-2).dp)
+                                        .clip(ShapePill)
+                                        .clickable { viewModel.openUpdateDialog() }
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        if (isDownloading) {
+                                            CircularProgressIndicator(
+                                                progress = { downloadProgress },
+                                                modifier = Modifier.size(9.dp),
+                                                strokeWidth = 1.5.dp,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(3.dp))
+                                            Text(
+                                                text = "${(downloadProgress * 100).toInt()}%",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        } else {
+                                            Icon(
+                                                imageVector = Icons.Outlined.CheckCircle,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(9.dp),
+                                                tint = MaterialTheme.colorScheme.primary
+                                            )
+                                            Spacer(modifier = Modifier.width(2.dp))
+                                            Text(
+                                                text = if (isZh) "安装中" else "Install",
+                                                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp, fontWeight = FontWeight.Bold),
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     },
                     scrollBehavior = scrollBehavior,

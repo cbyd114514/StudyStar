@@ -419,7 +419,7 @@ fun SettingsScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (isZh) "运行日志与事件" else "Runtime Logs",
+                                    text = if (isZh) "精简运行日志" else "Compact Runtime Logs",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.SemiBold,
                                     color = MaterialTheme.colorScheme.onSurface,

@@ -44,6 +44,7 @@ import androidx.compose.material.icons.outlined.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -477,12 +478,18 @@ fun ExpressiveUpdateDialog(
                             .verticalScroll(rememberScrollState())
                             .padding(12.dp)
                     ) {
+                        val displayNotes = remember(updateInfo, isZh) {
+                            if (updateInfo.cleanChangelog.isNotBlank()) {
+                                updateInfo.cleanChangelog
+                            } else {
+                                AppUpdateManager.cleanAndFormatReleaseNotes(updateInfo.releaseNotes, isZh)
+                            }
+                        }
                         Text(
-                            text = updateInfo.releaseNotes.ifBlank {
-                                if (isZh) "本次更新包含多项稳定性改进与界面优化。" else "Bug fixes and performance improvements."
-                            },
+                            text = displayNotes,
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 20.sp
                         )
                     }
                 }
@@ -498,7 +505,8 @@ fun ExpressiveUpdateDialog(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = if (isZh) "正在下载更新安装包..." else "Downloading update package...",
+                                    text = if (updateStatus.sourceTip.isNotBlank()) updateStatus.sourceTip
+                                           else if (isZh) "正在下载更新安装包..." else "Downloading update package...",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.primary
                                 )
@@ -532,6 +540,25 @@ fun ExpressiveUpdateDialog(
                                 text = if (isZh) "安装包下载完成，准备就绪" else "APK downloaded successfully",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = Color(0xFF2E7D32),
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                    is AppUpdateManager.UpdateStatus.Installing -> {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (isZh) "已下载完成，正在唤起系统安装器..." else "Launching installer...",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.primary,
                                 fontWeight = FontWeight.SemiBold
                             )
                         }
