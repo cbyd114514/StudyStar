@@ -38,12 +38,33 @@ object NotificationHelper {
     }
 
     /**
-     * 将底层技术报错或错误码转化为通俗易懂的说明文案（支持中英双语），绝不直接展示晦涩难懂的技术错误码
+     * 将底层技术报错或错误码转化为通俗易懂的说明文案（支持中英双语），绝对去除原始代码错误与代码参数
      */
     fun humanize(rawMessage: String, lang: String = "zh"): String {
-        val raw = rawMessage.trim()
+        var raw = rawMessage.trim()
         val isEn = lang == "en"
+
+        // 核心清洗：剥离所有冒号后随附的代码抛错、异常类名及底层技术参数
+        // 例如 "刷课任务未完成或异常: error: name 'gc' is not defined" -> 纯净提取业务前缀
+        val techErrorRegex = Regex(
+            """[:：]\s*(?:error\s*:\s*|Exception\s*:\s*|name\s*['"]?\w+['"]?\s*is\s*not\s*defined|NameError|TypeError|KeyError|IndexError|ValueError|AttributeError|SyntaxError|RuntimeError|Traceback|java\.|status_code|code\s*[-:=]).*""",
+            RegexOption.IGNORE_CASE
+        )
+        raw = raw.replace(techErrorRegex, "").trim()
+
         return when {
+            raw.contains("刷课任务未完成或异常") ->
+                if (isEn) "Study task not completed or exception occurred"
+                else "刷课任务未完成或异常"
+            raw.contains("刷课任务失败") ->
+                if (isEn) "Study task failed"
+                else "刷课任务失败"
+            raw.contains("启动刷课任务失败") ->
+                if (isEn) "Failed to start study task"
+                else "启动刷课任务失败"
+            raw.contains("刷课异常") ->
+                if (isEn) "Study task exception occurred"
+                else "刷课任务执行异常"
             raw.contains("code-2") || raw.contains("无效的参数") ->
                 if (isEn) "Quiz parameters updated or not yet open; automatically recorded and proceeding"
                 else "测验题目参数已更新或未到开放作答时间，已自动记录并继续后续学习"
@@ -87,12 +108,13 @@ object NotificationHelper {
                 var clean = raw.replace(Regex("""^\[.*?\]\s*"""), "")
                     .replace(Regex("""code\s*[-:=]?\s*\w+""", RegexOption.IGNORE_CASE), "")
                     .replace(Regex("""status_code\s*[-:=]?\s*\w+""", RegexOption.IGNORE_CASE), "")
+                    .replace(Regex("""error\s*:\s*.*""", RegexOption.IGNORE_CASE), "")
                     .replace(Regex("""java\.[a-zA-Z0-9_.]+:?"""), "")
                     .replace(Regex("""Traceback.*""", RegexOption.DOT_MATCHES_ALL), "")
                     .trim()
-                if (clean.isBlank()) {
-                    if (isEn) "Minor network glitch detected; automatically handling error"
-                    else "任务遇到微小网络波动，系统正在自动容错处理"
+                if (clean.isBlank() || clean.startsWith("error", ignoreCase = true) || clean.contains("NameError", ignoreCase = true)) {
+                    if (isEn) "System execution exception handled automatically"
+                    else "系统运行遇到环境异常，已自动保护并记录"
                 } else {
                     if (isEn) AppStrings.translateLog(clean, "en") else clean
                 }

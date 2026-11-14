@@ -34,10 +34,12 @@ private val COURSE_IDS_KEY = stringPreferencesKey("course_ids")
 private val USERNAME_KEY = stringPreferencesKey("saved_username")
 private val PASSWORD_KEY = stringPreferencesKey("saved_password")
 private val LLM_CONFIG_KEY = stringPreferencesKey("llm_config")
+private val LLM_ENABLED_KEY = booleanPreferencesKey("llm_enabled")
 private val LANGUAGE_KEY = stringPreferencesKey("app_language")
 private val AUTO_LOGIN_KEY = booleanPreferencesKey("auto_login")
 private val LEGAL_AGREED_KEY = booleanPreferencesKey("legal_agreed")
 private fun getUserLlmKey(username: String) = stringPreferencesKey("llm_config_${username.trim()}")
+private fun getUserLlmEnabledKey(username: String) = booleanPreferencesKey("llm_enabled_${username.trim()}")
 private fun getUserCourseIdsKey(username: String) = stringPreferencesKey("course_ids_${username.trim()}")
 
 /**
@@ -114,6 +116,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _llmTestState.value = LlmTestState.Idle
     }
 
+    // AI 智能答题开关状态（默认无配置时关闭，有配置且开启后自动保存并生效）
+    private val _isLlmEnabled = MutableStateFlow(false)
+    val isLlmEnabled: StateFlow<Boolean> = _isLlmEnabled.asStateFlow()
+
+    fun setLlmEnabled(enabled: Boolean) {
+        val username = _loginState.value.username ?: _loginState.value.savedUsername ?: ""
+        _isLlmEnabled.value = enabled
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    prefs[LLM_ENABLED_KEY] = enabled
+                    if (username.isNotBlank()) {
+                        prefs[getUserLlmEnabledKey(username)] = enabled
+                    }
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
     // 标记用户是否手动点击了登出（登出后绝对禁止静默自动登录）
     val userManuallyLoggedOut = MutableStateFlow(false)
 
@@ -150,7 +172,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 savedUsername = _loginState.value.savedUsername,
                 savedPassword = _loginState.value.savedPassword
             )
-            // 登出时重置内存中的 API Key 与课程选择，不与下一个登录账号共享
+            // 登出时重置内存中的 API Key、开关与课程选择，不与下一个登录账号共享
+            _isLlmEnabled.value = false
             _studyState.value = _studyState.value.copy(
                 llmConfig = null,
                 courseIds = null
@@ -176,6 +199,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val rawLlm = data[getUserLlmKey(username)] ?: ""
                 val userLlmConfig = CryptoSecurityHelper.decrypt(rawLlm)
                 val userCourseIds = data[getUserCourseIdsKey(username)] ?: ""
+                val rawEnabled = data[getUserLlmEnabledKey(username)] ?: data[LLM_ENABLED_KEY]
+                // 若用户此前未手动切换过开关，则在有有效配置时默认开启，无配置时默认关闭
+                _isLlmEnabled.value = rawEnabled ?: userLlmConfig.isNotBlank()
                 _studyState.value = _studyState.value.copy(
                     llmConfig = userLlmConfig.ifBlank { null },
                     courseIds = userCourseIds.ifBlank { null }
@@ -205,9 +231,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     if (llmConfig.isNotBlank()) {
                         prefs[getUserLlmKey(username)] = encryptedLlm
                         prefs[LLM_CONFIG_KEY] = encryptedLlm
+                        if (!_isLlmEnabled.value) {
+                            _isLlmEnabled.value = true
+                            prefs[LLM_ENABLED_KEY] = true
+                            prefs[getUserLlmEnabledKey(username)] = true
+                        }
                     } else {
                         prefs.remove(getUserLlmKey(username))
                         prefs.remove(LLM_CONFIG_KEY)
+                        _isLlmEnabled.value = false
+                        prefs[LLM_ENABLED_KEY] = false
+                        prefs[getUserLlmEnabledKey(username)] = false
                     }
                 }
                 if (logSuccess) {
@@ -472,7 +506,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             val actualSpeed = speed.takeIf { it > 0 } ?: _studyState.value.speed
             val actualJobs = jobs.takeIf { it > 0 } ?: _studyState.value.jobs
-            val actualLlmConfig = llmConfig ?: _studyState.value.llmConfig
+            val rawLlmConfig = llmConfig ?: _studyState.value.llmConfig
+            val actualLlmConfig = if (_isLlmEnabled.value && !rawLlmConfig.isNullOrBlank()) {
+                rawLlmConfig
+            } else {
+                null
+            }
 
             // 如果已经获取过课程列表，将其序列化为 JSON 传递给 Python 端，避免重复请求
             val coursesJson = if (_courses.value.isNotEmpty()) {
@@ -501,7 +540,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
             addLog("开始刷课任务...", LogType.INFO)
             if (!actualLlmConfig.isNullOrBlank()) {
-                addLog("大模型答题已配置", LogType.INFO)
+                addLog("大模型智能答题已启用", LogType.INFO)
+            } else {
+                addLog("大模型智能答题未启用（开关关闭或未配置API）", LogType.INFO)
             }
             if (coursesJson != null) {
                 addLog("使用已获取的课程列表，避免重复请求", LogType.INFO)

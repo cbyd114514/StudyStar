@@ -32,6 +32,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.LibraryBooks
 import androidx.compose.material.icons.automirrored.outlined.OpenInNew
@@ -73,7 +74,10 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Card
+import androidx.compose.material3.Switch
 import androidx.compose.material3.OutlinedTextField
+import com.superstar.android.notification.NotificationHelper
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -133,6 +137,7 @@ fun DashboardScreen(
     val currentLang by viewModel.currentLanguage.collectAsState()
     val llmTestState by viewModel.llmTestState.collectAsState()
     val recentIssues by viewModel.recentIssues.collectAsState()
+    val isLlmEnabled by viewModel.isLlmEnabled.collectAsState()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -424,18 +429,19 @@ fun DashboardScreen(
                         animationSpec = spring(stiffness = Spring.StiffnessMediumLow)
                     ) + fadeOut(animationSpec = tween(180))
                 ) {
-                    ElevatedCard(
+                    Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.elevatedCardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.25f)
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f)
                         ),
-                        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.25f)),
+                        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
                     ) {
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(18.dp)
+                                .padding(horizontal = 14.dp, vertical = 12.dp)
                         ) {
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -458,10 +464,16 @@ fun DashboardScreen(
                                 OutlinedButton(
                                     onClick = { viewModel.clearIssues() },
                                     shape = MaterialTheme.shapes.small,
-                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.4f)),
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
                                     modifier = Modifier.height(28.dp)
                                 ) {
-                                    Text(AppStrings.clearIssuesBtn(currentLang), fontSize = 11.sp)
+                                    Text(
+                                        text = AppStrings.clearIssuesBtn(currentLang),
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontWeight = FontWeight.Medium
+                                    )
                                 }
                             }
 
@@ -469,29 +481,43 @@ fun DashboardScreen(
 
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                                 recentIssues.takeLast(5).reversed().forEach { issue ->
+                                    val isError = issue.type == MainViewModel.LogType.ERROR
+                                    val borderColor = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.2f)
+                                                      else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
+                                    val containerColor = if (isError) MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                                                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    val cleanDisplayMessage = NotificationHelper.humanize(issue.message, currentLang)
+
                                     Surface(
                                         modifier = Modifier.fillMaxWidth(),
-                                        shape = MaterialTheme.shapes.medium,
-                                        color = if (issue.type == MainViewModel.LogType.ERROR)
-                                            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.5f)
-                                        else MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)
+                                        shape = RoundedCornerShape(10.dp),
+                                        color = containerColor,
+                                        border = BorderStroke(0.8.dp, borderColor)
                                     ) {
                                         Row(
-                                            modifier = Modifier.padding(10.dp),
-                                            verticalAlignment = Alignment.Top
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
                                         ) {
+                                            // 时间戳固定胶囊 Badge，避免多行文本时第二行顶格破坏排版
+                                            Surface(
+                                                shape = RoundedCornerShape(6.dp),
+                                                color = if (isError) MaterialTheme.colorScheme.error.copy(alpha = 0.12f)
+                                                        else MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
+                                            ) {
+                                                Text(
+                                                    text = issue.timestamp,
+                                                    style = MaterialTheme.typography.labelSmall,
+                                                    color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontWeight = FontWeight.SemiBold,
+                                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(10.dp))
                                             Text(
-                                                text = issue.timestamp,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                fontWeight = FontWeight.Bold,
-                                                modifier = Modifier.padding(top = 1.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(8.dp))
-                                            Text(
-                                                text = AppStrings.translateLog(issue.message, currentLang),
+                                                text = cleanDisplayMessage,
                                                 style = MaterialTheme.typography.bodySmall,
                                                 color = MaterialTheme.colorScheme.onSurface,
+                                                fontWeight = FontWeight.Medium,
                                                 modifier = Modifier.weight(1f)
                                             )
                                         }
@@ -877,11 +903,55 @@ fun DashboardScreen(
                                     )
                                 }
 
-                                LlmStatusBadge(
-                                    llmTestState = llmTestState,
-                                    configLlmProvider = configLlmProvider,
-                                    currentLang = currentLang
-                                )
+                                val hasApiKey = configLlmKey.isNotBlank()
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    // 连通性测试状态反馈微标
+                                    if (llmTestState is MainViewModel.LlmTestState.Success) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = Color(0xFF2E7D32).copy(alpha = 0.15f),
+                                            modifier = Modifier.padding(end = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = AppStrings.llmConnectedBadge(currentLang),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = Color(0xFF2E7D32),
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    } else if (llmTestState is MainViewModel.LlmTestState.Failure) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.15f),
+                                            modifier = Modifier.padding(end = 6.dp)
+                                        ) {
+                                            Text(
+                                                text = AppStrings.llmFailedBadge(currentLang),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.error,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+
+                                    // 智能答题独立开关：未配置 API 情况下默认关闭且禁用
+                                    Switch(
+                                        checked = hasApiKey && isLlmEnabled,
+                                        onCheckedChange = { checked: Boolean ->
+                                            if (hasApiKey) {
+                                                viewModel.setLlmEnabled(checked)
+                                            } else {
+                                                showLlmSection = true
+                                            }
+                                        },
+                                        enabled = hasApiKey,
+                                        modifier = Modifier.padding(end = 2.dp)
+                                    )
+                                }
 
                                 // 小角落里的使用说明圆圈图标按钮（冒号/问号加一个圈，点击弹窗）
                                 IconButton(

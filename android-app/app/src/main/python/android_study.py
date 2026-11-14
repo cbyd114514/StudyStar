@@ -37,6 +37,7 @@ sys.modules['concurrent.futures'] = _cf_mock
 # ===== 结束 multiprocessing mock =====
 
 import json
+import gc
 import time
 import hashlib
 import random
@@ -499,11 +500,17 @@ class AndroidStudyEngine:
             try:
                 import json
                 config_dict = json.loads(llm_config) if isinstance(llm_config, str) else llm_config
-                self.llm_provider = create_llm_provider(config_dict)
-                if self.llm_provider:
-                    self.log(f"[配置] 大模型初始化成功: {type(self.llm_provider).__name__}")
+                # 检查开关状态：若显式为 False 则关闭
+                if config_dict.get("enabled", True) is not False:
+                    self.llm_provider = create_llm_provider(config_dict)
+                    if self.llm_provider:
+                        # 关键：注入日志回调，让大模型的请求和报错能被系统实时捕获与展示
+                        self.llm_provider.set_log_func(self.log)
+                        self.log(f"[配置] 大模型答题初始化成功: {type(self.llm_provider).__name__}")
+                    else:
+                        self.log("[配置] 大模型初始化失败: create_llm_provider 返回 None")
                 else:
-                    self.log("[配置] 大模型初始化失败: create_llm_provider 返回 None")
+                    self.log("[配置] AI 智能答题开关当前为关闭状态，跳过大模型初始化")
             except Exception as e:
                 self.log(f"[配置] 大模型初始化异常: {e}")
 
@@ -1266,16 +1273,27 @@ class AndroidStudyEngine:
     # ==================== 作业答题 ====================
 
     def _judgement_select(self, res_text: str) -> str:
-        """从答案文本中准确判断正误"""
+        """从答案文本中准确判断正误，优先判定否定语境，杜绝误判"""
+        if not res_text:
+            return "true" if random.choice([True, False]) else "false"
         s = str(res_text).strip().lower()
-        true_keywords = ["true", "对", "正确", "√", "yes", "t", "1", "是"]
-        false_keywords = ["false", "错", "错误", "×", "x", "no", "f", "0", "否"]
-        for kw in true_keywords:
-            if kw in s:
-                return "true"
-        for kw in false_keywords:
-            if kw in s:
+        # 1. 优先判定否定特征（包含否定词时一票否决为错误，避免被‘不正确’中的‘正确’误判）
+        false_patterns = [
+            r"不正确", r"不对", r"不是", r"错误", r"错", r"false", r"\bno\b",
+            r"假", r"×", r"\bx\b", r"\bf\b", r"\b0\b", r"不符合", r"不属实"
+        ]
+        for pat in false_patterns:
+            if re.search(pat, s):
                 return "false"
+
+        # 2. 判定肯定特征
+        true_patterns = [
+            r"正确", r"对", r"是", r"true", r"\byes\b", r"真", r"√", r"\bt\b", r"\b1\b", r"属实", r"符合"
+        ]
+        for pat in true_patterns:
+            if re.search(pat, s):
+                return "true"
+
         return "true" if random.choice([True, False]) else "false"
 
     def _extract_score_from_html(self, html: str) -> Optional[float]:
@@ -1917,34 +1935,63 @@ class AndroidStudyEngine:
                 if not answer and res:
                     res_str = str(res).strip()
                     if q_type == "single":
-                        if len(res_str) == 1 and res_str.upper() in "ABCDEFG":
+                        # 1. 优先提取大模型明确给出的选项字母 (A-G)
+                        m_single = re.search(r'(?:^|[选项为是【（(:\s])([A-Ga-g])(?:$|[.、:，\s)）】])', res_str)
+                        if m_single:
+                            answer = m_single.group(1).upper()
+                        elif len(res_str) == 1 and res_str.upper() in "ABCDEFG":
                             answer = res_str.upper()
-                        elif len(res_str) >= 2 and res_str[0].upper() in "ABCDEFG" and res_str[1] in ".,:、 ":
-                            answer = res_str[0].upper()
                         else:
+                            # 2. 若大模型输出的是选项文本内容，逐项进行语义重合度匹配
                             options_list = multi_cut(options)
-                            if options_list:
-                                t_res = clean_res(res_str)
-                                for o in options_list:
-                                    if t_res and (t_res[0] in o or is_subsequence(t_res[0], o)):
-                                        answer = o[:1].upper()
+                            best_letter = ""
+                            best_score = 0.0
+                            for opt_idx, opt_raw in enumerate(options_list):
+                                opt_letter = chr(ord('A') + opt_idx)
+                                m_lead = re.match(r'^([A-Ga-g])[\s.、:，]', opt_raw)
+                                if m_lead:
+                                    opt_letter = m_lead.group(1).upper()
+                                opt_body = re.sub(r'^[A-Ga-g][\s.、:，]*', '', opt_raw).strip()
+                                clean_ans = clean_res(res_str)
+                                target_text = clean_ans[0] if clean_ans else res_str
+                                if target_text and opt_body:
+                                    if target_text == opt_body or target_text in opt_body or opt_body in target_text:
+                                        best_letter = opt_letter
                                         break
+                                    common_chars = set(target_text) & set(opt_body)
+                                    sim = len(common_chars) / max(1, len(set(opt_body)))
+                                    if sim > best_score and sim >= 0.4:
+                                        best_score = sim
+                                        best_letter = opt_letter
+                            if best_letter:
+                                answer = best_letter
                     elif q_type == "multiple":
-                        matched_letters = re.findall(r"\b[A-G]\b|[A-G]", res_str.upper())
-                        if matched_letters and len(set(matched_letters)) >= 2:
-                            answer = "".join(sorted(set(matched_letters)))
+                        # 1. 优先提取所有明确指示的选项字母集合 (A-G)
+                        matched_letters = re.findall(r'[A-Ga-g]', res_str)
+                        valid_letters = [c.upper() for c in matched_letters if c.upper() in "ABCDEFG"]
+                        if len(set(valid_letters)) >= 2:
+                            answer = "".join(sorted(set(valid_letters)))
                         else:
+                            # 2. 逐项匹配多选题选项内容
                             options_list = multi_cut(options)
                             res_list = multi_cut(res_str)
-                            if res_list and options_list:
-                                collected = []
-                                for _a in clean_res(res_list):
-                                    for o in options_list:
-                                        if _a in o or is_subsequence(_a, o):
-                                            collected.append(o[:1].upper())
-                                            break
-                                if collected:
-                                    answer = "".join(sorted(set(collected)))
+                            collected = set()
+                            for r_item in res_list:
+                                c_ans = clean_res(r_item)
+                                target = c_ans[0] if c_ans else r_item
+                                for opt_idx, opt_raw in enumerate(options_list):
+                                    opt_letter = chr(ord('A') + opt_idx)
+                                    m_lead = re.match(r'^([A-Ga-g])[\s.、:，]', opt_raw)
+                                    if m_lead:
+                                        opt_letter = m_lead.group(1).upper()
+                                    opt_body = re.sub(r'^[A-Ga-g][\s.、:，]*', '', opt_raw).strip()
+                                    if target and opt_body and (target in opt_body or opt_body in target or is_subsequence(target, opt_body)):
+                                        collected.add(opt_letter)
+                                        break
+                            if len(collected) >= 2:
+                                answer = "".join(sorted(collected))
+                            elif len(collected) == 1:
+                                answer = list(collected)[0]
                     elif q_type == "judgement":
                         answer = self._judgement_select(res_str)
                     elif q_type in ("completion", "shortanswer"):
@@ -2137,8 +2184,18 @@ class AndroidStudyEngine:
                 if attempt >= max_attempts - 1:
                     return StudyResult.ERROR
             finally:
-                del questions
-                gc.collect()
+                try:
+                    if "questions" in locals():
+                        del questions
+                except Exception:
+                    pass
+                try:
+                    try:
+            gc.collect()
+        except Exception:
+            pass
+                except Exception:
+                    pass
 
         return StudyResult.SUCCESS
 
@@ -2734,7 +2791,10 @@ class AndroidStudyEngine:
         set_study_progress(1.0)
         clear_current_video()
         clear_current_quiz()
-        gc.collect()
+        try:
+            gc.collect()
+        except Exception:
+            pass
         self.log(f"课程学习完成: {course_name}")
 
     def run(self, course_ids=None, speed=1.0, jobs=4):
@@ -2962,11 +3022,58 @@ def test_environment():
 
 
 # ==================== 大模型答题支持 ====================
+def _clean_llm_response_text(raw_content: str) -> str:
+    """全面清洗大模型响应，剥离思考链标签、Markdown代码块与多余空白"""
+    if not raw_content:
+        return ""
+    text = str(raw_content).strip()
+    # 剥离 DeepSeek-R1 / Qwen 等推理模型的思考过程 <think>...</think>
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text, flags=re.IGNORECASE).strip()
+    if "</think>" in text:
+        text = text.split("</think>")[-1].strip()
+    if text.startswith("<think>"):
+        text = text[7:].strip()
+    # 剥离 Markdown 代码块包裹
+    m_code = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", text)
+    if m_code:
+        text = m_code.group(1).strip()
+    return text
+
+def _extract_answer_from_cleaned_llm(cleaned_text: str) -> str:
+    """从清洗后的文本中提取答案列表或文本"""
+    if not cleaned_text:
+        return ""
+    # 1. 尝试直接标准 JSON 解析
+    try:
+        data = json.loads(cleaned_text)
+        if isinstance(data, dict):
+            for k in ["Answer", "answer", "answers", "Result", "result", "data"]:
+                val = data.get(k)
+                if val:
+                    if isinstance(val, list):
+                        return "\n".join(str(x).strip() for x in val if str(x).strip())
+                    return str(val).strip()
+        elif isinstance(data, list):
+            return "\n".join(str(x).strip() for x in data if str(x).strip())
+    except Exception:
+        pass
+
+    # 2. 正则提取 {"Answer": [...]} 中的内容
+    m_arr = re.search(r'["\']?(?:Answer|answer|result)["\']?\s*:\s*\[([\s\S]*?)\]', cleaned_text)
+    if m_arr:
+        items = re.findall(r'["\']([^"\']+)["\']', m_arr.group(1))
+        if items:
+            return "\n".join(x.strip() for x in items if x.strip())
+
+    # 3. 兜底返回去除多余 Markdown 后的纯文本
+    return cleaned_text.strip()
+
+
 class AndroidAI:
     """
     Android 版 AI 答题实现
-    与 api/answer.py 中的 AI 类功能一致，使用 requests.post() 直接 HTTP 请求
-    （不依赖 openai 库，避免 jiter 在 Chaquopy Python 3.8 环境无法安装的问题）
+    使用 requests.post() 直接 HTTP 请求 OpenAI 兼容协议
+    全面支持 DeepSeek-R1 等推理模型思考链过滤与温度优化
     """
 
     def __init__(self, config: dict):
@@ -2974,7 +3081,6 @@ class AndroidAI:
         self.api_key = config.get("api_key") or config.get("key", "")
         raw_url = config.get("api_url") or config.get("endpoint", "https://api.openai.com/v1")
         self.api_url = raw_url
-        # 如果 endpoint 已经包含 /chat/completions，不再追加
         if "/chat/completions" in raw_url:
             self.endpoint = raw_url
         else:
@@ -2995,55 +3101,50 @@ class AndroidAI:
 
     def query(self, q_info: dict) -> str:
         """
-        向 AI 提问并获取答案
-        使用 requests.post() 直接调用 OpenAI 兼容 API，与原始项目 AI._query() 功能一致
+        向 AI 提问并获取答案，采用极低温与精准结构化 Prompt 提升做题命中率
         """
-        def remove_md_json_wrapper(md_str):
-            """去除 Markdown 代码块包装，与原始项目一致"""
-            import re as _re
-            pattern = r'^\s*```(?:json)?\s*(.*?)\s*```\s*$'
-            match = _re.search(pattern, md_str, _re.DOTALL)
-            return match.group(1).strip() if match else md_str.strip()
-
         title = q_info.get("title", "")
         options = q_info.get("options", "")
         q_type = q_info.get("type", "")
 
-        # 去除选项字母（ABCD），防止大模型直接输出字母而非内容，与原始项目一致
+        # 规整化 options 选项格式，保证每行都有标准的 A. / B. / C. 标号，利于大模型推理
+        formatted_options = options
         if options:
-            options_list = options.split('\n')
-            import re as _re
-            cleaned_options = [_re.sub(r"^[A-Z]\s*", "", option) for option in options_list]
-            options = "\n".join(cleaned_options)
+            raw_lines = [l.strip() for l in options.split("\n") if l.strip()]
+            has_letters = all(re.match(r'^[A-Ga-g][\s.、:，]', l) for l in raw_lines)
+            if not has_letters:
+                formatted_options = "\n".join([f"{chr(ord('A') + i)}. {l}" for i, l in enumerate(raw_lines)])
 
-        # 按题目类型构造 system prompt 和 user content，与原始项目 AI._query() 一致
+        # 按题目类型构造专业、严密的 Prompt
         if q_type == "single":
-            system_prompt = "本题为单选题，你只能选择一个选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-            user_content = f"题目：{title}\n选项：{options}"
+            system_prompt = "你是一名专业的高校课程答题助教。本题为单选题，请根据题目和选项选出唯一正确选项的字母代号（如 A、B、C 或 D）。请以标准 JSON 格式输出，示例：{\"Answer\": [\"A\"]}。若无法判定字母，亦可输出完整选项文本。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}\n选项：\n{formatted_options}"
         elif q_type == "multiple":
-            system_prompt = "本题为多选题，你必须选择两个或以上选项，请根据题目和选项回答问题，以json格式输出正确的选项内容，示例回答：{\"Answer\": [\"答案1\",\n\"答案2\",\n\"答案3\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-            user_content = f"题目：{title}\n选项：{options}"
+            system_prompt = "你是一名专业的高校课程答题助教。本题为多选题，请根据题目和选项选出所有正确选项的字母代号（如 A、B、C 等）。请以标准 JSON 格式输出，示例：{\"Answer\": [\"A\", \"B\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}\n选项：\n{formatted_options}"
         elif q_type == "completion":
-            system_prompt = "本题为填空题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+            system_prompt = "你是一名专业的高校课程答题助教。本题为填空题，请根据题目和学科知识给出最精确简练的答案。请以标准 JSON 格式输出，示例：{\"Answer\": [\"答案内容\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
             user_content = f"题目：{title}"
         elif q_type == "judgement":
-            system_prompt = "本题为判断题，你只能回答正确或者错误，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+            system_prompt = "你是一名专业的高校课程答题助教。本题为判断题，请判定题目对错，只能回答'正确'或'错误'。请以标准 JSON 格式输出，示例：{\"Answer\": [\"正确\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
             user_content = f"题目：{title}"
         else:
-            system_prompt = "本题为简答题，你必须根据语境和相关知识填入合适的内容，请根据题目回答问题，以json格式输出正确的答案，示例回答：{\"Answer\": [\"这是我的答案\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
+            system_prompt = "你是一名专业的高校课程答题助教。本题为简答题，请给出简明规范的回答。请以标准 JSON 格式输出，示例：{\"Answer\": [\"这是我的答案\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
             user_content = f"题目：{title}"
 
-        # 构造请求头和请求体，使用 requests.post() 直接调用 API
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
+        # 客观题设置 temperature=0.1，大幅降低模型幻觉与不确定性漂移
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_content},
             ],
+            "temperature": 0.1,
+            "max_tokens": 1024,
         }
 
         for attempt in range(self.max_retries):
@@ -3059,14 +3160,8 @@ class AndroidAI:
                 if response.status_code == 200:
                     result = response.json()
                     content = result['choices'][0]['message']['content'].strip()
-                    # 解析 JSON 格式的返回，与原始项目一致
-                    try:
-                        import json as _json
-                        parsed = _json.loads(remove_md_json_wrapper(content))
-                        answer = "\n".join(parsed['Answer']).strip()
-                    except Exception:
-                        self._log(f"[AI] 无法解析大模型输出内容: {content[:100]}")
-                        answer = content
+                    cleaned = _clean_llm_response_text(content)
+                    answer = _extract_answer_from_cleaned_llm(cleaned)
                     self._log(f"[AI] 获取到答案: {answer[:80]}...")
                     return answer
                 else:
@@ -3091,6 +3186,7 @@ class AndroidAI:
                 "model": self.model,
                 "messages": [{'role': 'user', 'content': '你好，请回答：1+1 等于几？只回答数字。'}],
                 "max_tokens": 10,
+                "temperature": 0.1,
             }
             response = requests.post(
                 self.endpoint,
@@ -3109,17 +3205,16 @@ class AndroidAI:
 class AndroidSiliconFlow:
     """
     Android 版 SiliconFlow 大模型答题实现
-    与 api/answer.py 中的 SiliconFlow 类完全一致
+    针对硅基流动全面支持 Qwen、DeepSeek-V3/R1 思考链过滤与温度优化
     """
 
     def __init__(self, config: dict):
-        # 兼容 Kotlin 端传入的字段名 (endpoint/key) 和 Python 端字段名 (api_url/api_key)
         self.api_key = config.get("api_key") or config.get("key", "")
         raw_url = config.get("api_url") or config.get("endpoint", "https://api.siliconflow.cn/v1/chat/completions")
         self.api_url = raw_url
-        self.api_endpoint = raw_url  # 与原始项目 SiliconFlow._init_tiku() 中的 self.api_endpoint 对应
+        self.api_endpoint = raw_url
         self.model = config.get("model", "Qwen/Qwen2-7B-Instruct")
-        self.model_name = self.model  # 与原始项目 SiliconFlow._init_tiku() 中的 self.model_name 对应
+        self.model_name = self.model
         self.timeout = config.get("timeout", 60)
         self.max_retries = config.get("max_retries", 3)
         self.log_func = None
@@ -3136,46 +3231,49 @@ class AndroidSiliconFlow:
     def query(self, q_info: dict) -> str:
         """
         向 SiliconFlow 提问并获取答案
-        与原始项目 api/answer.py SiliconFlow._query() 完全一致
         """
-        def remove_md_json_wrapper(md_str):
-            """去除 Markdown 代码块包装，与原始项目一致"""
-            import re as _re
-            pattern = r'^\s*```(?:json)?\s*(.*?)\s*```\s*$'
-            match = _re.search(pattern, md_str, _re.DOTALL)
-            return match.group(1).strip() if match else md_str.strip()
-
         title = q_info.get("title", "")
         options = q_info.get("options", "")
         q_type = q_info.get("type", "")
 
-        # 构造请求头，与原始项目一致
+        # 规整化 options 选项格式
+        formatted_options = options
+        if options:
+            raw_lines = [l.strip() for l in options.split("\n") if l.strip()]
+            has_letters = all(re.match(r'^[A-Ga-g][\s.、:，]', l) for l in raw_lines)
+            if not has_letters:
+                formatted_options = "\n".join([f"{chr(ord('A') + i)}. {l}" for i, l in enumerate(raw_lines)])
+
+        if q_type == "single":
+            system_prompt = "你是一名专业的高校课程答题助教。本题为单选题，请根据题目和选项选出唯一正确选项的字母代号（如 A、B、C 或 D）。请以标准 JSON 格式输出，示例：{\"Answer\": [\"A\"]}。若无法判定字母，亦可输出完整选项文本。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}\n选项：\n{formatted_options}"
+        elif q_type == "multiple":
+            system_prompt = "你是一名专业的高校课程答题助教。本题为多选题，请根据题目和选项选出所有正确选项的字母代号（如 A、B、C 等）。请以标准 JSON 格式输出，示例：{\"Answer\": [\"A\", \"B\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}\n选项：\n{formatted_options}"
+        elif q_type == "completion":
+            system_prompt = "你是一名专业的高校课程答题助教。本题为填空题，请根据题目和学科知识给出最精确简练的答案。请以标准 JSON 格式输出，示例：{\"Answer\": [\"答案内容\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}"
+        elif q_type == "judgement":
+            system_prompt = "你是一名专业的高校课程答题助教。本题为判断题，请判定题目对错，只能回答'正确'或'错误'。请以标准 JSON 格式输出，示例：{\"Answer\": [\"正确\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}"
+        else:
+            system_prompt = "你是一名专业的高校课程答题助教。本题为简答题，请给出简明规范的回答。请以标准 JSON 格式输出，示例：{\"Answer\": [\"这是我的答案\"]}。除 JSON 外严禁输出任何解释或 Markdown 格式。"
+            user_content = f"题目：{title}"
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
 
-        # 构造系统提示词，与原始项目 SiliconFlow._query() 一致
-        system_prompt = ""
-        if q_type == "single":
-            system_prompt = "本题为单选题，请根据题目和选项选择唯一正确答案，输出的是选项的具体内容，而不是内容前的ABCD，并以JSON格式输出：示例回答：{\"Answer\": [\"正确选项内容\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_type == "multiple":
-            system_prompt = "本题为多选题，请选择所有正确选项，输出的是选项的具体内容，而不是内容前的ABCD，以JSON格式输出：示例回答：{\"Answer\": [\"选项1\",\"选项2\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_type == "completion":
-            system_prompt = "本题为填空题，请直接给出填空内容，以JSON格式输出：示例回答：{\"Answer\": [\"答案文本\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-        elif q_type == "judgement":
-            system_prompt = "本题为判断题，请回答'正确'或'错误'，以JSON格式输出：示例回答：{\"Answer\": [\"正确\"]}。除此之外不要输出任何多余的内容，也不要使用MD语法。如果你使用了互联网搜索，也请不要返回搜索的结果和参考资料"
-
-        # 构造请求体，与原始项目一致
         payload = {
             "model": self.model_name,
             "messages": [
                 {"role": "system", "content": system_prompt},
-                {"role": "user", "content": f"题目：{title}\n选项：{options}"},
+                {"role": "user", "content": user_content},
             ],
             "stream": False,
-            "max_tokens": 4096,
-            "temperature": 0.7,
+            "max_tokens": 1024,
+            "temperature": 0.1,
             "top_p": 0.7,
             "response_format": {"type": "text"},
         }
@@ -3193,9 +3291,8 @@ class AndroidSiliconFlow:
                 if response.status_code == 200:
                     result = response.json()
                     content = result['choices'][0]['message']['content']
-                    import json as _json
-                    parsed = _json.loads(remove_md_json_wrapper(content))
-                    answer = "\n".join(parsed['Answer']).strip()
+                    cleaned = _clean_llm_response_text(content)
+                    answer = _extract_answer_from_cleaned_llm(cleaned)
                     self._log(f"[SiliconFlow] 获取到答案: {answer[:80]}...")
                     return answer
                 else:

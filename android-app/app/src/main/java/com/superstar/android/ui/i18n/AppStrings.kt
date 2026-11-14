@@ -283,6 +283,12 @@ Ticking agreement on the login interface constitutes a legally binding acknowled
     fun aiEnabled(lang: String): String =
         if (lang == "zh") "已启用" else "Enabled"
 
+    fun aiDisabled(lang: String): String =
+        if (lang == "zh") "已关闭" else "Disabled"
+
+    fun aiRequireKeyTip(lang: String): String =
+        if (lang == "zh") "请先在下方配置并测试 API Key 后再开启" else "Please configure API Key below before enabling"
+
     fun aiGuideTitle(lang: String): String =
         if (lang == "zh") "AI 智能答题使用说明" else "AI Quiz Solver Guide"
 
@@ -537,6 +543,8 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("大模型初始化成功:", "LLM initialized successfully:")
         msg = msg.replace("大模型初始化失败:", "LLM initialization failed:")
         msg = msg.replace("大模型初始化异常:", "LLM initialization exception:")
+        msg = msg.replace("大模型智能答题已启用", "LLM quiz solver enabled")
+        msg = msg.replace("大模型智能答题未启用（开关关闭或未配置API）", "LLM quiz solver disabled (switch off or no API)")
         msg = msg.replace("大模型答题已配置", "LLM quiz solver configured")
         msg = msg.replace("大模型连接测试成功", "LLM connection test succeeded")
         msg = msg.replace("大模型连接测试失败", "LLM connection test failed")
