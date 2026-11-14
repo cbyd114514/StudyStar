@@ -84,8 +84,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentPage = MutableStateFlow(Page.LOGIN)
     val currentPage: StateFlow<Page> = _currentPage.asStateFlow()
 
+    // 优先根据设备系统语言自动识别初始语言 (系统为中文则为 zh，其他默认为 en)
+    private val systemDefaultLang: String
+        get() = if (java.util.Locale.getDefault().language.startsWith("zh")) "zh" else "en"
+
     // 界面语言状态 (zh / en)
-    private val _currentLanguage = MutableStateFlow("zh")
+    private val _currentLanguage = MutableStateFlow(
+        if (java.util.Locale.getDefault().language.startsWith("zh")) "zh" else "en"
+    )
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
 
     // 自动登录勾选状态 (默认不勾选 false)
@@ -312,7 +318,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val savedUsername = data[USERNAME_KEY]
                 val savedPasswordRaw = data[PASSWORD_KEY]
                 val savedPassword = CryptoSecurityHelper.decrypt(savedPasswordRaw)
-                val savedLanguage = data[LANGUAGE_KEY] ?: "zh"
+                val savedLanguage = data[LANGUAGE_KEY] ?: systemDefaultLang
                 val savedAutoLogin = data[AUTO_LOGIN_KEY] ?: false
                 val savedLegalAgreed = data[LEGAL_AGREED_KEY] ?: false
                 _currentLanguage.value = savedLanguage

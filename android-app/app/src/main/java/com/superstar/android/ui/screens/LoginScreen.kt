@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
 import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Visibility
@@ -170,7 +171,7 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // 顶部语言快速切换（登录前即可直接选择中文或英文）
+                // 顶部语言快速切换（在登录前即可直接切换中文或 English，前一级全局生效）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
@@ -181,7 +182,17 @@ fun LoginScreen(
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
-                        Row(modifier = Modifier.padding(3.dp)) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Language,
+                                contentDescription = "Language",
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
                             val isZh = currentLang == "zh"
                             Surface(
                                 shape = CircleShape,
@@ -195,7 +206,7 @@ fun LoginScreen(
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (isZh) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isZh) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                             Surface(
@@ -206,11 +217,11 @@ fun LoginScreen(
                                     .clickable { viewModel.setLanguage("en") }
                             ) {
                                 Text(
-                                    text = "EN",
+                                    text = "English",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = if (!isZh) FontWeight.Bold else FontWeight.Normal,
                                     color = if (!isZh) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                             }
                         }

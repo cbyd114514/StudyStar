@@ -1542,6 +1542,65 @@ class AndroidStudyEngine:
         details = self._check_work_score_and_details(_course, _job, _job_info, questions)
         return details.get("score")
 
+    def _fetch_real_work_page(self, target_url: str, params: dict = None, referer: str = "") -> tuple:
+        """
+        穿透获取作业/重做真实页面
+        自动解析嵌套 iframe、JavaScript location.href 跳转及多层级跳转
+        返回 (resp, resp_text)
+        """
+        headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36 Edg/129.0.0.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        }
+        if referer:
+            headers["Referer"] = referer
+
+        curr_resp = None
+        curr_text = ""
+        try:
+            curr_resp = self.session.get(target_url, params=params, headers=headers, timeout=30)
+            curr_text = curr_resp.text if curr_resp else ""
+
+            # 最多穿透 3 层 iframe 或跳转
+            for _ in range(3):
+                if not curr_text:
+                    break
+
+                # 1. 穿透嵌套作业 iframe
+                if "<iframe" in curr_text.lower():
+                    try:
+                        soup_if = BeautifulSoup(curr_text, "html.parser")
+                        iframe_tag = soup_if.find("iframe")
+                        if iframe_tag and iframe_tag.get("src"):
+                            src = iframe_tag.get("src")
+                            if any(k in src.lower() for k in ["work", "dohomework", "workhandle", "mooc-ans"]):
+                                real_url = urllib.parse.urljoin(curr_resp.url, src)
+                                self.log(f"[作业] 穿透嵌套 iframe -> {real_url}")
+                                curr_resp = self.session.get(real_url, headers={"Referer": curr_resp.url}, timeout=30)
+                                curr_text = curr_resp.text
+                                soup_if.decompose()
+                                continue
+                        soup_if.decompose()
+                    except Exception:
+                        pass
+
+                # 2. 穿透 JavaScript 页面跳转脚本
+                if "location.href" in curr_text or "location.replace" in curr_text:
+                    m_redir = re.search(r"""(?:window\.)?location(?:\.href|\.replace)?\s*=\s*['"]([^'"]+)['"]""", curr_text)
+                    if m_redir:
+                        real_url = urllib.parse.urljoin(curr_resp.url, m_redir.group(1))
+                        self.log(f"[作业] 穿透跳转脚本 -> {real_url}")
+                        curr_resp = self.session.get(real_url, headers={"Referer": curr_resp.url}, timeout=30)
+                        curr_text = curr_resp.text
+                        continue
+
+                break
+        except Exception as e:
+            self.log(f"[作业] 页面请求穿透异常: {e}")
+
+        return curr_resp, curr_text
+
 
     def study_topic_job(self, course, job, job_info) -> StudyResult:
         """
@@ -1749,37 +1808,37 @@ class AndroidStudyEngine:
                 self.log(f"[作业] 上一轮测验成绩未及格 ({last_score} 分 < 60分)，正在自动重做第 {attempt + 1}/{max_attempts} 轮...")
                 time.sleep(2.0)
 
-            # 1. 获取作业页面
+            # 1. 穿透获取作业与重做作答页面
             resp = None
             resp_text = ""
 
+            def is_valid_work_content(html: str) -> bool:
+                if not html:
+                    return False
+                return any(k in html for k in ["singleQuesId", "TiMu", "totalQuestionNum", "questionId", "Zy_TItle"]) or ("form" in html.lower() and "work" in html.lower())
+
             if attempt == 0:
                 _url = "https://mooc1.chaoxing.com/mooc-ans/api/work"
-                try:
-                    resp = self.session.get(
-                        _url,
-                        params={
-                            "api": "1",
-                            "workId": work_id,
-                            "jobid": _job["jobid"],
-                            "originJobId": _job["jobid"],
-                            "needRedirect": "true",
-                            "skipHeader": "true",
-                            "knowledgeid": knowledge_id,
-                            "ktoken": ktoken,
-                            "cpi": cpi,
-                            "ut": "s",
-                            "clazzId": class_id,
-                            "type": "",
-                            "enc": enc,
-                            "mooc2": "1",
-                            "courseid": course_id,
-                        },
-                        timeout=30
-                    )
-                    resp_text = resp.text
-                except Exception as e:
-                    self.log(f"[作业] 请求失败: {e}")
+                params = {
+                    "api": "1",
+                    "workId": work_id,
+                    "jobid": _job["jobid"],
+                    "originJobId": _job["jobid"],
+                    "needRedirect": "true",
+                    "skipHeader": "true",
+                    "knowledgeid": knowledge_id,
+                    "ktoken": ktoken,
+                    "cpi": cpi,
+                    "ut": "s",
+                    "clazzId": class_id,
+                    "type": "",
+                    "enc": enc,
+                    "mooc2": "1",
+                    "courseid": course_id,
+                }
+                resp, resp_text = self._fetch_real_work_page(_url, params=params)
+                if not resp or not resp_text:
+                    self.log("[作业] 请求失败，未能获取作业页面")
                     return StudyResult.ERROR
             else:
                 # 重做轮次：通过 redo 入口及最新作答ID构建重做作答表单链接
@@ -1799,19 +1858,16 @@ class AndroidStudyEngine:
                 ])
 
                 for r_url in candidate_redo_urls:
-                    try:
-                        self.log(f"[作业] 正在获取重做作答页: {r_url}")
-                        r_resp = self.session.get(r_url, headers={"Referer": "https://mooc1.chaoxing.com/mooc-ans/api/work"}, timeout=30)
-                        if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "TiMu" in r_resp.text or "totalQuestionNum" in r_resp.text or "form" in r_resp.text.lower()):
-                            resp = r_resp
-                            resp_text = r_resp.text
-                            self.log("[作业] 成功获取重做作答页面")
-                            break
-                    except Exception:
-                        pass
+                    self.log(f"[作业] 正在穿透获取重做作答页: {r_url}")
+                    r_resp, r_text = self._fetch_real_work_page(r_url, referer="https://mooc1.chaoxing.com/mooc-ans/api/work")
+                    if r_resp and is_valid_work_content(r_text):
+                        resp = r_resp
+                        resp_text = r_text
+                        self.log("[作业] 成功穿透获取重做作答页面")
+                        break
 
-                if not resp or ("singleQuesId" not in resp_text and "TiMu" not in resp_text and "totalQuestionNum" not in resp_text and "form" not in resp_text.lower()):
-                    self.log(f"[作业] 重做入口未开放或平台限制重做，保留当前成绩: {last_score} 分")
+                if not resp or not is_valid_work_content(resp_text):
+                    self.log(f"[作业] 重做入口未开放或已达平台重做限制，保留当前成绩: {last_score} 分")
                     return StudyResult.SUCCESS
 
             if "教师未创建完成该测验" in resp_text:
@@ -1853,43 +1909,19 @@ class AndroidStudyEngine:
                         ])
                         got_redo_form = False
                         for r_url in candidate_redo_urls:
-                            try:
-                                r_resp = self.session.get(r_url, headers={"Referer": "https://mooc1.chaoxing.com/mooc-ans/api/work"}, timeout=30)
-                                if r_resp.status_code == 200 and ("singleQuesId" in r_resp.text or "TiMu" in r_resp.text or "totalQuestionNum" in r_resp.text or "form" in r_resp.text.lower()):
-                                    resp = r_resp
-                                    resp_text = r_resp.text
-                                    got_redo_form = True
-                                    self.log("[作业] 成功通过重做入口获取题目")
-                                    break
-                            except Exception:
-                                pass
+                            r_resp, r_text = self._fetch_real_work_page(r_url, referer="https://mooc1.chaoxing.com/mooc-ans/api/work")
+                            if r_resp and is_valid_work_content(r_text):
+                                resp = r_resp
+                                resp_text = r_text
+                                got_redo_form = True
+                                self.log("[作业] 成功通过重做入口获取题目")
+                                break
                         if not got_redo_form:
                             self.log(f"[作业] 该作业不允许重做或重做入口未开放，保留已有成绩: {score} 分")
                             return StudyResult.SUCCESS
                 else:
                     self.log("[作业] 该作业此前已完成提交，无需重复作答")
                     return StudyResult.SUCCESS
-
-            try:
-                soup_initial = BeautifulSoup(resp_text, "html.parser")
-                iframe_tag = soup_initial.find("iframe")
-                if iframe_tag and iframe_tag.get("src"):
-                    iframe_src = iframe_tag.get("src")
-                    if any(k in iframe_src for k in ["work", "doHomeWork", "workHandle"]):
-                        real_work_url = urllib.parse.urljoin(resp.url, iframe_src)
-                        self.log(f"[作业] 发现嵌套作业 iframe，正在跳转获取真实作业页: {real_work_url}")
-                        resp = self.session.get(real_work_url, timeout=30)
-                        resp_text = resp.text
-                elif "location.href" in resp_text and len(resp_text) < 1000:
-                    m_redir = re.search(r"""(?:window\.)?location(?:\.href)?\s*=\s*['"]([^'"]+)['"]""", resp_text)
-                    if m_redir:
-                        redir_url = urllib.parse.urljoin(resp.url, m_redir.group(1))
-                        self.log(f"[作业] 发现页面跳转脚本，正在重定向: {redir_url}")
-                        resp = self.session.get(redir_url, timeout=30)
-                        resp_text = resp.text
-                soup_initial.decompose()
-            except Exception as e:
-                self.log(f"[作业] 跳转检测容错: {e}")
 
             # 2. 解析题目与表单元数据
             questions = self._decode_questions_info(resp_text, resp, _course, _job, _job_info)
@@ -2112,20 +2144,44 @@ class AndroidStudyEngine:
 
             self.log(f"[作业] 准备提交: workAnswerId={questions.get('workAnswerId', '')}, workId={questions.get('workId', '')}, totalQuestionNum={questions.get('totalQuestionNum', '')}, courseId={questions.get('courseId', '')}, classId={questions.get('classId', '')}")
 
-            # 6. 执行提交
+            # 如果是重做轮次且已有旧的作答ID，妥善处理 oldWorkAnswerId 避免超星判定重复批阅冲突
+            if attempt > 0 and latest_work_answer_id:
+                questions["oldWorkAnswerId"] = str(latest_work_answer_id)
+                if questions.get("workAnswerId") == str(latest_work_answer_id):
+                    questions["workAnswerId"] = ""
+
+            # 6. 执行提交并严格确认提交状态
             try:
                 self.log(f"[作业] 正在提交答案至: {submit_url}")
                 res = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
+                is_submit_success = False
                 res_json = {}
                 try:
                     res_json = res.json()
                 except Exception:
                     pass
 
-                msg = res_json.get("msg", "") if isinstance(res_json, dict) else str(res.text[:200])
+                msg = res_json.get("msg", "") if isinstance(res_json, dict) else str(res.text[:300])
 
-                if res_json.get("status") is True:
-                    self.log(f"[作业] 提交答题成功 -> {msg}")
+                # 1. 明确的 JSON 状态成功
+                if isinstance(res_json, dict) and (res_json.get("status") is True or res_json.get("success") is True):
+                    is_submit_success = True
+                # 2. 页面重定向或返回了成绩/批阅/题目结果 HTML
+                elif res.status_code == 200 and not res_json and any(k in res.text for k in ["TiMu", "viewScore", "totalScore", "已提交", "批阅", "成绩"]):
+                    is_submit_success = True
+                    self.log("[作业] 提交后超星已成功重定向至结果或已批阅页面")
+                # 3. 平台提示已达上限或不可再修改，说明先前作答已生效保存
+                elif any(w in msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已经作答", "已完成", "作业已截止", "已批阅", "超过重做次数", "无重做机会", "重做次数已用尽", "不可再次作答"]):
+                    self.log(f"[作业] 平台反馈状态 -> {msg}")
+                    details = self._check_work_score_and_details(_course, _job, _job_info, questions, latest_work_answer_id)
+                    score = details.get("score")
+                    if score is not None:
+                        self.log(f"[作业] 保留已有有效成绩: {score} 分")
+                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已完成)")
+                    return StudyResult.SUCCESS
+
+                if is_submit_success:
+                    self.log(f"[作业] 确认提交答题成功 -> {msg}")
                     set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
 
                     details = self._check_work_score_and_details(_course, _job, _job_info, questions, latest_work_answer_id)
@@ -2140,25 +2196,21 @@ class AndroidStudyEngine:
                     if score is not None:
                         last_score = score
                         if score >= 60.0:
-                            self.log(f"[作业] 测验成绩: {score} 分，已达到及格线 (60分)")
+                            self.log(f"[作业] 测验成绩: {score} 分，已达到及格线 (60分)，测验圆满完成")
                             return StudyResult.SUCCESS
                         else:
                             self.log(f"[作业] 测验成绩: {score} 分，未达及格线 (60分)")
                             if attempt < max_attempts - 1:
-                                self.log(f"[作业] 准备进行第 {attempt + 2}/{max_attempts} 轮自动重做...")
+                                self.log(f"[作业] 准备进行第 {attempt + 2}/{max_attempts} 轮自动重做（已载入批阅正解，下一轮将纠正错误答案）...")
                                 continue
                             else:
-                                self.log(f"[作业] 已达最大重做轮次 ({max_attempts} 轮)，保留最终成绩: {score} 分")
+                                self.log(f"[作业] 已达最大重做轮次 ({max_attempts} 轮)，保留最终最高成绩: {score} 分")
                                 return StudyResult.SUCCESS
                     else:
-                        self.log("[作业] 测验已提交完成（平台尚未出分，可能需教师主观批阅）")
+                        self.log("[作业] 测验已提交完成（平台尚未出分，可能需教师主观批阅或定时公布）")
                         return StudyResult.SUCCESS
 
-                if any(w in msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已经作答", "已完成", "作业已截止", "已批阅"]):
-                    self.log(f"[作业] 作业此前已完成或已提交 -> {msg}")
-                    set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (已完成)")
-                    return StudyResult.SUCCESS
-
+                # 备用提交接口尝试
                 candidate_endpoints = [
                     f"{origin}/mooc-ans/work/addStudentWorkNew",
                     f"{origin}/mooc-ans/work/addStudentWorkNewWeb",
@@ -2171,9 +2223,13 @@ class AndroidStudyEngine:
                         continue
                     try:
                         res_alt = self.session.post(alt_url, data=questions, headers=submit_headers, timeout=30)
-                        res_alt_json = res_alt.json()
-                        alt_msg = res_alt_json.get("msg", "")
-                        if res_alt_json.get("status") is True or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
+                        res_alt_json = {}
+                        try:
+                            res_alt_json = res_alt.json()
+                        except Exception:
+                            pass
+                        alt_msg = res_alt_json.get("msg", "") if isinstance(res_alt_json, dict) else str(res_alt.text[:300])
+                        if (isinstance(res_alt_json, dict) and (res_alt_json.get("status") is True or res_alt_json.get("success") is True)) or any(w in alt_msg for w in ["已经提交", "已提交", "已经完成", "无需重复提交", "已完成"]):
                             self.log(f"[作业] 备用接口提交成功 -> {alt_msg}")
                             set_current_quiz(quiz_name, f"第 {total_questions}/{total_questions} 题 (答题完毕)")
                             submitted_alt = True
@@ -2206,6 +2262,7 @@ class AndroidStudyEngine:
                                 return StudyResult.SUCCESS
                     return StudyResult.SUCCESS
 
+                # 尝试保存草稿
                 try:
                     questions["pyFlag"] = "1"
                     res_save = self.session.post(submit_url, data=questions, headers=submit_headers, timeout=30)
@@ -2217,7 +2274,7 @@ class AndroidStudyEngine:
                 except Exception:
                     pass
 
-                self.log(f"[作业] 提交答题提示: {msg}")
+                self.log(f"[作业] 提交答题反馈: {msg}")
                 if attempt >= max_attempts - 1:
                     return StudyResult.ERROR
 
