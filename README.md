@@ -3,11 +3,11 @@
   <h2 align="center" style="font-weight: 600">学习星 (StudyStar)</h2>
 
   <p align="center">
-    超星学习通全功能辅助引擎与现代 Google Material Design 3 极清高刷 Android 原生客户端
+    超星学习通全功能辅助引擎与 Google Material Design 3 Expressive (2026 规范) 极清高刷 Android 原生客户端
   </p>
 
   <p align="center">
-    <a href="https://github.com/cbyd114514/StudyStar/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-v1.5.9-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载最新版 APK" /></a>
+    <a href="https://github.com/cbyd114514/StudyStar/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-v1.5.10-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载最新版 APK" /></a>
   </p>
 </p>
 
@@ -21,9 +21,15 @@
 ## 核心特性一览
 
 ### 1. Android 原生客户端 (`android-app/`)
-- **Google Material Design 3 (Material You) 规范全景重塑**
-  - **动态取色与品牌色彩系统**：原生对接 Android 12+ (API 31+) Dynamic Color，内置 Oceanic Blue 品牌色调系统，完整覆盖 Primary、Secondary、Tertiary、Surface Container（Lowest/Low/Normal/High/Highest）、Outline 及 Error 全套语义角色；
-  - **15 阶 Typography 与统一 Shapes**：完整遵循 M3 字体阶梯与 4dp~28dp 圆角比例，Pinned TopAppBar 协同嵌套滚动（NestedScroll），全控件保持 48dp 最小触控靶区。
+- **Google Material Design 3 Expressive (2026 规范) 情感化设计全景重塑**
+  - **动态色阶层级 (Tonal Elevation)**：严禁使用黑色高斯模糊投影，纯粹依托 5 级表面色阶（Surface, SurfaceContainerLowest/Low/Normal/High/Highest）明度差构建真实 Z 轴层次；
+  - **非对称 Bento Grid 看板**：28dp Hero 主卡片聚合课程、章节与杂志级等宽大字号进度，错落排布视频与测验次级微卡片；
+  - **正弦波浪律动指示器 (Wavy Progress Indicator)**：流动正弦波物理轨道，任务运行时展现充满能量的波形动态；
+  - **悬浮胶囊工具栏 (Floating Capsule Dock)**：居中悬浮胶囊工具底栏，搭配 20dp Squircle 独立 FAB；
+  - **物理弹簧微动效 (Spring Physics Motion)**：空间弹簧与效果弹簧全面接入，按压触发 scale(0.95f) 自然收缩回弹。
+- **应用内全自动检查更新体系 (`AppUpdateManager`)**
+  - **GitHub Releases 语义化检测**：应用启动或手动一键检索 GitHub 最新版本与发布日志；
+  - **应用内流式下载与安装**：支持 302 重定向断点流式下载，实时正弦波浪进度指示，下载完成通过安全 `FileProvider` 自动唤起系统 PackageInstaller 完成无缝安装。
 - **高刷新率显示与 Compose 极速渲染管线**
   - **原子性 JNI 调度**：将高频轮询的 7 次离散 JNI 跨语言调用合并为单次原子性快照接口，结合协程非阻塞 `delay`，大幅降低 CPU 与 Python GIL 争用；
   - **@Immutable 与重组隔离**：核心状态模型均标注 `@Immutable`，`LazyColumn` 绑定稳定 `key` 与 `contentType`，将实时跳动的进度拆分为独立叶子 Composable，适配 **60Hz / 90Hz / 120Hz / 144Hz** 原生高刷屏幕。

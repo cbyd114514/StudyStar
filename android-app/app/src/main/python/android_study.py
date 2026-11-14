@@ -55,6 +55,7 @@ from dataclasses import dataclass
 
 import requests
 from bs4 import BeautifulSoup
+from bs4.element import NavigableString
 
 
 # ==================== 全局日志系统 ====================
@@ -1296,6 +1297,18 @@ class AndroidStudyEngine:
 
         return "true" if random.choice([True, False]) else "false"
 
+    def _normalize_title(self, title: str) -> str:
+        """
+        归一化题目标题，剔除题号、题型标签与多余标点空白
+        确保在超星开启了题目乱序、题型乱序时仍能 100% 精准命中上一轮已批阅的标准答案
+        """
+        if not title:
+            return ""
+        s = re.sub(r'^(?:[(（]?\d+[)）]?[.、\s]*)+', '', title).strip()
+        s = re.sub(r'^[【\[(（](?:单选题|多选题|填空题|判断题|简答题|名词解释|计算题)[】\])）]\s*', '', s).strip()
+        s = re.sub(r'\s+', '', s)
+        return s
+
     def _extract_score_from_html(self, html: str) -> Optional[float]:
         """从测验页面或成绩页面 HTML 中解析得分"""
         if not html:
@@ -1519,11 +1532,14 @@ class AndroidStudyEngine:
                                 if not title_node:
                                     continue
                                 q_title = self._extract_title(title_node)
-                                m_ans = re.search(r'正确答案[：:\s]*([A-Za-z0-9对错√×\u4e00-\u9fa5]+)', node.get_text())
+                                m_ans = re.search(r'正确答案[：:\s]*([^\r\n<]+)', node.get_text())
                                 if m_ans:
-                                    correct_ans = m_ans.group(1).strip()
-                                    if correct_ans:
-                                        result["known_answers"][q_title] = correct_ans
+                                    raw_ans = re.split(r'(?:我的答案|学生答案|解析|难度|分值|得分)', m_ans.group(1))[0].strip()
+                                    if raw_ans:
+                                        result["known_answers"][q_title] = raw_ans
+                                        norm_title = self._normalize_title(q_title)
+                                        if norm_title:
+                                            result["known_answers"][norm_title] = raw_ans
                         finally:
                             soup_detail.decompose()
                 except Exception as e:
@@ -1951,8 +1967,18 @@ class AndroidStudyEngine:
                 res = None
 
                 # 优先匹配上一轮已批阅提取出的真实标准答案，并标准化转换为超星后台提交格式
-                if title in known_correct_answers:
-                    raw_correct = str(known_correct_answers[title]).strip()
+                raw_correct = known_correct_answers.get(title)
+                norm_current_title = self._normalize_title(title)
+                if not raw_correct and norm_current_title:
+                    raw_correct = known_correct_answers.get(norm_current_title)
+                if not raw_correct and norm_current_title:
+                    for k, v in known_correct_answers.items():
+                        if len(norm_current_title) >= 6 and (norm_current_title in k or k in norm_current_title):
+                            raw_correct = v
+                            break
+
+                if raw_correct:
+                    raw_correct = str(raw_correct).strip()
                     self.log(f"[作业] 命中上一轮批阅正解原始值 -> {raw_correct}")
                     if q_type == "judgement":
                         answer = self._judgement_select(raw_correct)

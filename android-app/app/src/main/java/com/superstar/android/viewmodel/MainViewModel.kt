@@ -13,6 +13,8 @@ import androidx.lifecycle.viewModelScope
 import com.superstar.android.notification.NotificationHelper
 import com.superstar.android.python.PythonBridge
 import com.superstar.android.security.CryptoSecurityHelper
+import com.superstar.android.update.AppUpdateManager
+import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -121,6 +123,72 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun clearLlmTestState() {
         _llmTestState.value = LlmTestState.Idle
     }
+
+    // 应用自动更新状态与流式下载进度
+    val updateStatus: StateFlow<AppUpdateManager.UpdateStatus> = AppUpdateManager.status
+    val downloadProgress: StateFlow<Float> = AppUpdateManager.downloadProgress
+
+    private val _showUpdateDialog = MutableStateFlow(false)
+    val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
+    fun dismissUpdateDialog() {
+        _showUpdateDialog.value = false
+    }
+
+    fun openUpdateDialog() {
+        _showUpdateDialog.value = true
+    }
+
+    /**
+     * 检查新版本（支持静默或手动触发）
+     */
+    fun checkForUpdates(manual: Boolean = false) {
+        viewModelScope.launch {
+            val status = AppUpdateManager.checkUpdate(getApplication())
+            when (status) {
+                is AppUpdateManager.UpdateStatus.NewVersionAvailable -> {
+                    _showUpdateDialog.value = true
+                    addLog("发现新版本 StudyStar ${status.info.versionName}，已弹出更新面板", LogType.SUCCESS)
+                }
+                is AppUpdateManager.UpdateStatus.UpToDate -> {
+                    if (manual) {
+                        addLog("当前已是最新版本 (${status.currentVersion})", LogType.INFO)
+                    }
+                }
+                is AppUpdateManager.UpdateStatus.Failed -> {
+                    if (manual) {
+                        addLog("检查更新失败: ${status.errorMsg}", LogType.WARNING)
+                    }
+                }
+                else -> {}
+            }
+        }
+    }
+
+    /**
+     * 启动应用内更新包流式下载并自动调起系统安装
+     */
+    fun startDownloadUpdate(downloadUrl: String) {
+        viewModelScope.launch {
+            val context = getApplication<Application>()
+            addLog("开始下载更新安装包...", LogType.INFO)
+            val success = AppUpdateManager.downloadAndInstallApk(context, downloadUrl)
+            if (success) {
+                addLog("更新包下载完成，正在唤起系统安装器", LogType.SUCCESS)
+            } else {
+                addLog("更新包下载失败", LogType.ERROR)
+            }
+        }
+    }
+
+    /**
+     * 调起系统安装已下载好的更新 APK
+     */
+    fun installDownloadedApk(apkFile: File) {
+        val context = getApplication<Application>()
+        AppUpdateManager.installApk(context, apkFile)
+    }
+
 
     // AI 智能答题开关状态（默认无配置时关闭，有配置且开启后自动保存并生效）
     private val _isLlmEnabled = MutableStateFlow(false)
@@ -364,6 +432,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
 
                 addLog("已加载保存的配置: 速度=${savedSpeed}x, 并发=${savedJobs}", LogType.INFO)
+                checkForUpdates(manual = false)
             } catch (t: Throwable) {
                 addLog("加载配置失败: ${t.message}", LogType.WARNING)
             }

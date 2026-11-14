@@ -12,8 +12,8 @@ android {
         applicationId = "com.superstar.android"
         minSdk = 26
         targetSdk = 34
-        versionCode = 15
-        versionName = "1.5.9"
+        versionCode = 16
+        versionName = "1.5.10"
 
         ndk {
             abiFilters += listOf("arm64-v8a")
@@ -51,6 +51,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     composeOptions {

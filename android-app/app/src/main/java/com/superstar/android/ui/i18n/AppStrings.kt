@@ -12,6 +12,22 @@ object AppStrings {
     fun githubReleasesBtn(lang: String): String =
         if (lang == "zh") "前往最新安装包发布页 (Releases)" else "Download Latest Releases"
 
+
+    // --- 自动更新与版本提示 App Update ---
+    fun updateCheckTitle(lang: String): String = if (lang == "zh") "检查新版本" else "Check for Updates"
+    fun updateAvailableBanner(lang: String, ver: String): String =
+        if (lang == "zh") "发现新版本 $ver，点击查看更新详情" else "New version $ver available, tap to view details"
+    fun updateDialogTitle(lang: String): String = if (lang == "zh") "发现新版本可用" else "New Version Available"
+    fun updateCurrentVerLabel(lang: String): String = if (lang == "zh") "当前版本" else "Current Version"
+    fun updateLatestVerLabel(lang: String): String = if (lang == "zh") "最新版本" else "Latest Release"
+    fun updateNotesTitle(lang: String): String = if (lang == "zh") "更新日志" else "Release Notes"
+    fun updateDownloadBtn(lang: String): String = if (lang == "zh") "应用内一键下载更新" else "In-App Download"
+    fun updateDownloadingBtn(lang: String): String = if (lang == "zh") "正在下载更新安装包..." else "Downloading..."
+    fun updateInstallBtn(lang: String): String = if (lang == "zh") "立即安装" else "Install Now"
+    fun updateBrowserBtn(lang: String): String = if (lang == "zh") "浏览器下载" else "Browser"
+    fun updateAlreadyLatest(lang: String, ver: String): String =
+        if (lang == "zh") "当前已是最新版本 ($ver)" else "Already the latest version ($ver)"
+
     fun githubRepoBtn(lang: String): String =
         if (lang == "zh") "访问 GitHub 源码仓库" else "Visit GitHub Project"
 
@@ -590,6 +606,13 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("完整堆栈:", "Full stack trace:")
         msg = msg.replace("解析课程列表失败:", "Failed to parse course list:")
         msg = msg.replace("加载配置失败:", "Failed to load config:")
+
+        // 10. 自动更新与版本日志
+        msg = msg.replace("发现新版本", "Found new version")
+        msg = msg.replace("已弹出更新面板", "Update dialog shown")
+        msg = msg.replace("当前已是最新版本", "Currently on the latest version")
+        msg = msg.replace("检查更新失败:", "Check update failed:")
+        msg = msg.replace("更新包下载完成，正在唤起系统安装器", "Update APK downloaded, launching installer")
 
         return msg
     }

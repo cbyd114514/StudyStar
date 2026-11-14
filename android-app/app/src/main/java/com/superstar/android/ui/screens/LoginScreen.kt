@@ -80,6 +80,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.superstar.android.R
 import com.superstar.android.ui.i18n.AppStrings
+import com.superstar.android.ui.theme.ShapeBentoHero
+import com.superstar.android.ui.theme.ShapePill
 import com.superstar.android.viewmodel.MainViewModel
 import kotlin.math.hypot
 
@@ -236,7 +238,7 @@ fun LoginScreen(
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                     tonalElevation = 6.dp,
-                    shadowElevation = 4.dp,
+                    shadowElevation = 0.dp,
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                 ) {
                     Image(
@@ -297,14 +299,14 @@ fun LoginScreen(
 
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // 登录表单卡片
-                ElevatedCard(
+                // 登录表单卡片 (M3 Expressive Bento Hero)
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    colors = CardDefaults.elevatedCardColors(
+                    shape = ShapeBentoHero,
+                    colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                     ),
-                    elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)
+                    elevation = CardDefaults.cardElevation(0.dp)
                 ) {
                     Column(
                         modifier = Modifier
