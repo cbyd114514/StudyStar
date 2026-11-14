@@ -2,7 +2,6 @@ package com.superstar.android.ui.screens
 
 import android.widget.Toast
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -23,16 +22,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AccountCircle
 import androidx.compose.material.icons.outlined.ErrorOutline
-import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Language
 import androidx.compose.material.icons.outlined.Lock
-import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.material.icons.outlined.Visibility
 import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material3.Button
@@ -42,7 +40,6 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,7 +60,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalConfiguration
@@ -75,11 +71,11 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.superstar.android.R
 import com.superstar.android.ui.i18n.AppStrings
+import com.superstar.android.ui.theme.ShapeBentoCard
 import com.superstar.android.ui.theme.ShapeBentoHero
 import com.superstar.android.ui.theme.ShapePill
 import com.superstar.android.viewmodel.MainViewModel
@@ -87,7 +83,8 @@ import kotlin.math.hypot
 
 /**
  * 学习星 (StudyStar) 登录界面
- * 遵循 Material Design 3 规范、48dp 交互触控靶区与全屏涟漪揭示动画
+ * 遵循 Material Design 3 Expressive (2026 规范)
+ * 自动登录与法律合规统一紧凑排布、去除冗余提示、全屏水波平滑揭示动效
  */
 @Composable
 fun LoginScreen(
@@ -131,7 +128,7 @@ fun LoginScreen(
         }
     }
 
-    // 从本地加载已保存的账号密码到输入框（方便用户查看与修改）
+    // 从本地加载已保存账号密码
     val savedUsername = loginState.savedUsername
     val savedPassword = loginState.savedPassword
     LaunchedEffect(savedUsername, savedPassword) {
@@ -142,7 +139,7 @@ fun LoginScreen(
             password = savedPassword
         }
 
-        // 仅在明确勾选了【自动登录】且【已同意法律声明】且非手动登出的情况下，启动时才静默自动登录一次！
+        // 自动登录判定
         if (autoLogin && legalAgreed && !userManuallyLoggedOut && !autoLoginAttempted &&
             !savedUsername.isNullOrBlank() && !savedPassword.isNullOrBlank() &&
             !loginState.isLoggedIn && !loginState.isLoading
@@ -152,7 +149,6 @@ fun LoginScreen(
         }
     }
 
-    // 登录成功时触发从按钮展开到全屏的过渡动画
     LaunchedEffect(loginState.isLoggedIn) {
         if (loginState.isLoggedIn) {
             isExpandingToFullScreen = true
@@ -161,7 +157,7 @@ fun LoginScreen(
 
     Box(modifier = Modifier.fillMaxSize()) {
         Scaffold(
-            containerColor = MaterialTheme.colorScheme.background
+            containerColor = MaterialTheme.colorScheme.surface
         ) { innerPadding ->
             Column(
                 modifier = Modifier
@@ -173,14 +169,14 @@ fun LoginScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                // 顶部语言快速切换（在登录前即可直接切换中文或 English，前一级全局生效）
+                // 顶部语言快速切换胶囊（登录前前一级生效）
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Surface(
-                        shape = CircleShape,
+                        shape = ShapePill,
                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                     ) {
@@ -197,10 +193,10 @@ fun LoginScreen(
                             Spacer(modifier = Modifier.width(4.dp))
                             val isZh = currentLang == "zh"
                             Surface(
-                                shape = CircleShape,
+                                shape = ShapePill,
                                 color = if (isZh) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 modifier = Modifier
-                                    .clip(CircleShape)
+                                    .clip(ShapePill)
                                     .clickable { viewModel.setLanguage("zh") }
                             ) {
                                 Text(
@@ -212,10 +208,10 @@ fun LoginScreen(
                                 )
                             }
                             Surface(
-                                shape = CircleShape,
+                                shape = ShapePill,
                                 color = if (!isZh) MaterialTheme.colorScheme.primary else Color.Transparent,
                                 modifier = Modifier
-                                    .clip(CircleShape)
+                                    .clip(ShapePill)
                                     .clickable { viewModel.setLanguage("en") }
                             ) {
                                 Text(
@@ -237,8 +233,6 @@ fun LoginScreen(
                     modifier = Modifier.size(92.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    tonalElevation = 6.dp,
-                    shadowElevation = 0.dp,
                     border = BorderStroke(2.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
                 ) {
                     Image(
@@ -256,7 +250,8 @@ fun LoginScreen(
                     text = AppStrings.appName(currentLang),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
+                    color = MaterialTheme.colorScheme.primary,
+                    letterSpacing = (-0.02).sp
                 )
 
                 Text(
@@ -265,41 +260,9 @@ fun LoginScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(24.dp))
 
-                // 账号归属提示卡片
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
-                    ),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Info,
-                            contentDescription = "提示",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Text(
-                            text = AppStrings.loginNotice(currentLang),
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // 登录表单卡片 (M3 Expressive Bento Hero)
+                // 登录核心卡片 (M3 Bento Hero 28dp，去除了生硬提示)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = ShapeBentoHero,
@@ -315,9 +278,9 @@ fun LoginScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Text(
-                            text = if (currentLang == "zh") "账号登录" else "Account Login",
+                            text = if (currentLang == "zh") "学习通账号登录" else "Xuexitong Account Login",
                             style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
 
@@ -345,7 +308,7 @@ fun LoginScreen(
                                 keyboardType = KeyboardType.Text,
                                 imeAction = ImeAction.Next
                             ),
-                            shape = MaterialTheme.shapes.medium
+                            shape = ShapeBentoCard
                         )
 
                         Spacer(modifier = Modifier.height(16.dp))
@@ -395,10 +358,10 @@ fun LoginScreen(
                                     }
                                 }
                             ),
-                            shape = MaterialTheme.shapes.medium
+                            shape = ShapeBentoCard
                         )
 
-                        // 错误信息提示
+                        // 错误提示
                         if (loginState.error != null) {
                             Spacer(modifier = Modifier.height(14.dp))
                             Card(
@@ -406,7 +369,7 @@ fun LoginScreen(
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.errorContainer
                                 ),
-                                shape = MaterialTheme.shapes.small
+                                shape = ShapeBentoCard
                             ) {
                                 Row(
                                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -428,41 +391,83 @@ fun LoginScreen(
                             }
                         }
 
-                        // 法律合规与用户协议勾选栏（依据中华人民共和国法律法规，必须勾选同意方可登录）
-                        Spacer(modifier = Modifier.height(14.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable { viewModel.setLegalAgreed(!legalAgreed) }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                        // --- 自动登录与法律合规统一放置在同一区域（优雅并排排布） ---
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Surface(
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Checkbox(
-                                checked = legalAgreed,
-                                onCheckedChange = { viewModel.setLegalAgreed(it) },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary,
-                                    uncheckedColor = MaterialTheme.colorScheme.outline
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = AppStrings.legalCheckboxPrefix(currentLang),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = AppStrings.legalTermsTitle(currentLang),
-                                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.clickable { showLegalDialog = true }
-                            )
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                // 1. 自动登录行
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(ShapePill)
+                                        .clickable { viewModel.setAutoLogin(!autoLogin) },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = autoLogin,
+                                        onCheckedChange = { viewModel.setAutoLogin(it) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = MaterialTheme.colorScheme.primary,
+                                            uncheckedColor = MaterialTheme.colorScheme.outline
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = AppStrings.autoLoginCheckbox(currentLang),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                // 2. 法律合规与免责声明行
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(ShapePill)
+                                        .clickable { viewModel.setLegalAgreed(!legalAgreed) },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = legalAgreed,
+                                        onCheckedChange = { viewModel.setLegalAgreed(it) },
+                                        colors = CheckboxDefaults.colors(
+                                            checkedColor = MaterialTheme.colorScheme.primary,
+                                            uncheckedColor = MaterialTheme.colorScheme.outline
+                                        )
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Text(
+                                            text = AppStrings.legalCheckboxPrefix(currentLang),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        Text(
+                                            text = AppStrings.legalTermsTitle(currentLang),
+                                            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.clickable { showLegalDialog = true }
+                                        )
+                                    }
+                                }
+                            }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(20.dp))
 
-                        // 登录按钮（记录其中心坐标，驱动圆形揭示全屏过渡动画）
+                        // 登录行动按钮 (Pill 胶囊形)
                         Button(
                             onClick = {
                                 if (!legalAgreed) {
@@ -480,7 +485,7 @@ fun LoginScreen(
                                     buttonCenter = bounds.center
                                 },
                             enabled = !loginState.isLoading && username.isNotBlank() && password.isNotBlank(),
-                            shape = MaterialTheme.shapes.medium,
+                            shape = ShapePill,
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = MaterialTheme.colorScheme.primary,
                                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -493,145 +498,63 @@ fun LoginScreen(
                                     color = MaterialTheme.colorScheme.onPrimary
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
-                                Text(AppStrings.loggingIn(currentLang), fontSize = 15.sp)
+                                Text(AppStrings.loggingIn(currentLang), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                             } else {
                                 Text(
                                     text = AppStrings.loginButton(currentLang),
                                     fontSize = 16.sp,
-                                    fontWeight = FontWeight.Medium
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
-
-                        // 自动登录勾选框（紧贴在登录按钮下方，保证 48dp 交互靶区）
-                        Spacer(modifier = Modifier.height(10.dp))
-                        Row(
-                            modifier = Modifier
-                                .clip(MaterialTheme.shapes.small)
-                                .clickable { viewModel.setAutoLogin(!autoLogin) }
-                                .padding(horizontal = 8.dp, vertical = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = autoLogin,
-                                onCheckedChange = { viewModel.setAutoLogin(it) },
-                                colors = CheckboxDefaults.colors(
-                                    checkedColor = MaterialTheme.colorScheme.primary,
-                                    uncheckedColor = MaterialTheme.colorScheme.outline
-                                )
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = AppStrings.autoLoginCheckbox(currentLang),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
                     }
                 }
-
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // 底部内核状态微标
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Outlined.Terminal,
-                        contentDescription = null,
-                        modifier = Modifier.size(14.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = "Python: ${viewModel.pythonState.value}",
-                        style = MaterialTheme.typography.bodySmall,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
 
-        // --- 从登录按钮展开到全屏的水波形铺开动画 ---
+        // 登录成功时从按钮展开至全屏水波平滑过渡
         if (expandProgress > 0f) {
             val configuration = LocalConfiguration.current
             val density = LocalDensity.current
             val screenDiagonal = with(density) {
                 val w = configuration.screenWidthDp.dp.toPx()
                 val h = configuration.screenHeightDp.dp.toPx()
-                hypot(w, h) * 1.15f
+                hypot(w, h)
             }
             val primaryColor = MaterialTheme.colorScheme.primary
-            val destBgColor = MaterialTheme.colorScheme.background
+            val destBgColor = MaterialTheme.colorScheme.surface
 
             Canvas(modifier = Modifier.fillMaxSize()) {
-                val center = if (buttonCenter != Offset.Zero) buttonCenter else this.center
+                val center = if (buttonCenter != Offset.Zero) buttonCenter else Offset(size.width / 2f, size.height / 2f)
                 val currentRadius = screenDiagonal * expandProgress
 
-                // 1. 水波主体平滑铺开（以目标控制台背景色平滑铺满，杜绝深蓝到浅色的跳变闪烁）
                 drawCircle(
                     color = destBgColor,
                     radius = currentRadius,
                     center = center
                 )
 
-                // 2. 主水波边缘过渡光晕
-                drawCircle(
-                    color = primaryColor.copy(alpha = (0.45f * (1f - expandProgress * 0.7f)).coerceIn(0f, 1f)),
-                    radius = currentRadius,
-                    center = center,
-                    style = Stroke(width = 8.dp.toPx())
-                )
-
-                // 3. 第一道同心水波涟漪环（前置动态水波）
-                val wave1Radius = currentRadius * 1.12f + 18.dp.toPx()
-                val wave1Alpha = ((1f - expandProgress) * 0.55f).coerceIn(0f, 1f)
-                if (wave1Alpha > 0.01f) {
+                val edgeAlpha = ((1f - expandProgress) * 0.35f).coerceIn(0f, 1f)
+                if (edgeAlpha > 0.01f) {
                     drawCircle(
-                        color = primaryColor.copy(alpha = wave1Alpha),
-                        radius = wave1Radius,
+                        color = primaryColor.copy(alpha = edgeAlpha),
+                        radius = currentRadius,
                         center = center,
-                        style = Stroke(width = 5.dp.toPx())
-                    )
-                }
-
-                // 4. 第二道同心水波涟漪环（更外层柔和波纹）
-                val wave2Radius = currentRadius * 1.25f + 36.dp.toPx()
-                val wave2Alpha = ((1f - expandProgress) * 0.35f).coerceIn(0f, 1f)
-                if (wave2Alpha > 0.01f) {
-                    drawCircle(
-                        color = primaryColor.copy(alpha = wave2Alpha),
-                        radius = wave2Radius,
-                        center = center,
-                        style = Stroke(width = 3.dp.toPx())
-                    )
-                }
-
-                // 5. 第三道同心水波内环（紧随其后的内圈涟漪）
-                val wave3Radius = (currentRadius * 0.85f).coerceAtLeast(0f)
-                val wave3Alpha = ((1f - expandProgress) * 0.45f).coerceIn(0f, 1f)
-                if (wave3Alpha > 0.01f && wave3Radius > 0f) {
-                    drawCircle(
-                        color = primaryColor.copy(alpha = wave3Alpha),
-                        radius = wave3Radius,
-                        center = center,
-                        style = Stroke(width = 4.dp.toPx())
+                        style = androidx.compose.ui.graphics.drawscope.Stroke(width = 6.dp.toPx())
                     )
                 }
             }
         }
 
-        // 法律合规与免责声明全景弹窗
+        // 法律协议弹窗
         if (showLegalDialog) {
             LegalNoticeDialog(
                 currentLang = currentLang,
                 onDismiss = { showLegalDialog = false },
-                onAgree = { viewModel.setLegalAgreed(true) }
+                onAgree = {
+                    viewModel.setLegalAgreed(true)
+                    showLegalDialog = false
+                }
             )
         }
     }

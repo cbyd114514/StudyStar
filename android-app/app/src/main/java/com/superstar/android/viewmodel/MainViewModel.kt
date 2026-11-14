@@ -40,6 +40,7 @@ private val LLM_ENABLED_KEY = booleanPreferencesKey("llm_enabled")
 private val LANGUAGE_KEY = stringPreferencesKey("app_language")
 private val AUTO_LOGIN_KEY = booleanPreferencesKey("auto_login")
 private val LEGAL_AGREED_KEY = booleanPreferencesKey("legal_agreed")
+private val AUTO_CHECK_UPDATE_KEY = booleanPreferencesKey("auto_check_update")
 private fun getUserLlmKey(username: String) = stringPreferencesKey("llm_config_${username.trim()}")
 private fun getUserLlmEnabledKey(username: String) = booleanPreferencesKey("llm_enabled_${username.trim()}")
 private fun getUserCourseIdsKey(username: String) = stringPreferencesKey("course_ids_${username.trim()}")
@@ -130,6 +131,42 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showUpdateDialog = MutableStateFlow(false)
     val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
+    // 自动检查更新开关状态（默认开启 true，可持久化保存）
+    private val _autoCheckUpdate = MutableStateFlow(true)
+    val autoCheckUpdate: StateFlow<Boolean> = _autoCheckUpdate.asStateFlow()
+
+    fun setAutoCheckUpdate(enabled: Boolean) {
+        _autoCheckUpdate.value = enabled
+        viewModelScope.launch {
+            try {
+                val context = getApplication<Application>()
+                context.configDataStore.edit { prefs ->
+                    prefs[AUTO_CHECK_UPDATE_KEY] = enabled
+                }
+            } catch (_: Exception) {}
+        }
+    }
+
+    /**
+     * 从网页成功抓取到 DeepSeek API Key 后一键配置生效
+     * 锁定 Provider 为 DeepSeek，锁定极速模型 deepseek-chat，自动开启并执行连接测试
+     */
+    fun applyDeepSeekApiKey(apiKey: String) {
+        val cleanKey = apiKey.trim()
+        if (cleanKey.isBlank()) return
+        val map = linkedMapOf(
+            "provider" to "DeepSeek",
+            "endpoint" to "https://api.deepseek.com/v1/chat/completions",
+            "key" to cleanKey,
+            "model" to "deepseek-chat"
+        )
+        val json = com.google.gson.Gson().toJson(map)
+        saveUserLlmConfig(json, logSuccess = true)
+        setLlmEnabled(true)
+        testLlmConnection(json)
+    }
+
 
     fun dismissUpdateDialog() {
         _showUpdateDialog.value = false
@@ -431,8 +468,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 }
 
+                val savedAutoCheckUpdate = data[AUTO_CHECK_UPDATE_KEY] ?: true
+                _autoCheckUpdate.value = savedAutoCheckUpdate
                 addLog("已加载保存的配置: 速度=${savedSpeed}x, 并发=${savedJobs}", LogType.INFO)
-                checkForUpdates(manual = false)
+                if (savedAutoCheckUpdate) {
+                    checkForUpdates(manual = false)
+                }
             } catch (t: Throwable) {
                 addLog("加载配置失败: ${t.message}", LogType.WARNING)
             }

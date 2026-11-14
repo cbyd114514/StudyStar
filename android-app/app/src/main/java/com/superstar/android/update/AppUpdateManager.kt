@@ -34,8 +34,16 @@ object AppUpdateManager {
         val releaseNotes: String,
         val downloadUrl: String,
         val publishedAt: String,
-        val hasUpdate: Boolean
+        val hasUpdate: Boolean,
+        val briefChangelog: String = ""
     )
+
+    fun extractBriefChangelog(fullNotes: String): String {
+        val clean = fullNotes.replace(Regex("""[#*`\-_>\r\n]+"""), " ")
+            .replace(Regex("""https?://\S+"""), "")
+            .trim()
+        return if (clean.length > 45) clean.take(45) + "..." else clean.ifBlank { "包含多项界面优化与稳定性提升。" }
+    }
 
     sealed interface UpdateStatus {
         data object Idle : UpdateStatus
@@ -105,7 +113,8 @@ object AppUpdateManager {
                     releaseNotes = body,
                     downloadUrl = downloadUrl,
                     publishedAt = publishedAt,
-                    hasUpdate = hasUpdate
+                    hasUpdate = hasUpdate,
+                    briefChangelog = extractBriefChangelog(body)
                 )
 
                 val newStatus = if (hasUpdate) {

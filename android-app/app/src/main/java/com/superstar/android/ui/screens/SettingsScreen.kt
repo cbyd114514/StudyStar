@@ -9,6 +9,8 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +27,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.ExitToApp
@@ -52,6 +53,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -82,16 +84,13 @@ import com.superstar.android.ui.i18n.AppStrings
 import com.superstar.android.ui.theme.ShapeBentoCard
 import com.superstar.android.ui.theme.ShapePill
 import com.superstar.android.ui.theme.ShapeSquircle
-import com.superstar.android.ui.theme.StatusInfo
-import com.superstar.android.ui.theme.StatusSuccess
-import com.superstar.android.ui.theme.StatusWarning
 import com.superstar.android.update.AppUpdateManager
 import com.superstar.android.viewmodel.MainViewModel
 
 /**
  * 学习星 (StudyStar) 设置与工具界面
- * 遵循 Google Material Design 3 Expressive (2026 规范)
- * 纯色阶分层、Bento 卡片、胶囊形状、应用内一键检查更新与系统自动安装
+ * 遵循 Material Design 3 Expressive 规范
+ * 账号居首、退出在上、更新带开关与50字白话简述、日志默认收拢、开源与版权声明置底
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,15 +107,18 @@ fun SettingsScreen(
     val updateStatus by viewModel.updateStatus.collectAsState()
     val downloadProgress by viewModel.downloadProgress.collectAsState()
     val showUpdateDialog by viewModel.showUpdateDialog.collectAsState()
+    val autoCheckUpdate by viewModel.autoCheckUpdate.collectAsState()
 
     val isZh = currentLang == "zh"
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
-    var isLogsExpanded by remember { mutableStateOf(true) }
+
+    // 运行日志默认收起来，放在小角落
+    var isLogsExpanded by remember { mutableStateOf(false) }
     var showLegalDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(logs.size) {
-        if (logs.isNotEmpty() && !listState.isScrollInProgress) {
+        if (logs.isNotEmpty() && isLogsExpanded && !listState.isScrollInProgress) {
             listState.scrollToItem(logs.size - 1)
         }
     }
@@ -128,7 +130,7 @@ fun SettingsScreen(
                 TopAppBar(
                     title = {
                         Text(
-                            text = if (isZh) "学习星 设置与工具" else "StudyStar Settings & Tools",
+                            text = if (isZh) "设置与工具" else "Settings & Tools",
                             style = MaterialTheme.typography.titleLarge,
                             fontWeight = FontWeight.Bold,
                             letterSpacing = (-0.02).sp
@@ -158,8 +160,8 @@ fun SettingsScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // --- 1. 应用版本与检查更新 Bento 卡片 ---
-                item(key = "update_card", contentType = "card") {
+                // --- 1. 当前登录账号信息与退出登录 (放在最上面) ---
+                item(key = "account_card_top", contentType = "card") {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = ShapeBentoCard,
@@ -170,6 +172,95 @@ fun SettingsScreen(
                     ) {
                         Column(modifier = Modifier.padding(18.dp)) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = ShapeSquircle,
+                                    color = MaterialTheme.colorScheme.primaryContainer,
+                                    modifier = Modifier.size(40.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Person,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(22.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = AppStrings.currentAccountLabel(currentLang),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        text = loginState.username ?: loginState.savedUsername ?: (if (isZh) "已登录" else "Logged In"),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+
+                                Surface(
+                                    shape = ShapePill,
+                                    color = Color(0xFF2E7D32).copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = if (isZh) "在线" else "Active",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF2E7D32),
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 退出登录按钮 (位于上方账号卡片内)
+                            Button(
+                                onClick = {
+                                    viewModel.logout()
+                                    onBack()
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError
+                                ),
+                                shape = ShapePill
+                            ) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = AppStrings.logoutAccountBtn(currentLang),
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // --- 2. 软件更新与自动检查开关 ---
+                item(key = "update_card_section", contentType = "card") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ShapeBentoCard,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            // 标题栏与版本标识
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Surface(
                                     shape = ShapeSquircle,
                                     color = MaterialTheme.colorScheme.primaryContainer,
@@ -215,6 +306,72 @@ fun SettingsScreen(
 
                             Spacer(modifier = Modifier.height(14.dp))
 
+                            // 自动检查更新独立开关
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.5f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = AppStrings.autoCheckUpdateLabel(currentLang),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = AppStrings.autoCheckUpdateDesc(currentLang),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                    Switch(
+                                        checked = autoCheckUpdate,
+                                        onCheckedChange = { viewModel.setAutoCheckUpdate(it) }
+                                    )
+                                }
+                            }
+
+                            // 如果检测到了新版本，在按钮与标题之间出现“更新内容”（严格控制在50字内，大白话）
+                            if (updateStatus is AppUpdateManager.UpdateStatus.NewVersionAvailable) {
+                                val info = (updateStatus as AppUpdateManager.UpdateStatus.NewVersionAvailable).info
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Column(modifier = Modifier.padding(12.dp)) {
+                                        Text(
+                                            text = "${AppStrings.briefChangelogTitle(currentLang)} (v${info.versionName})",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            text = info.briefChangelog.ifBlank {
+                                                if (isZh) "全新升级界面与稳定性优化，修复已知问题。" else "UI improvements and stability fixes."
+                                            },
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            lineHeight = 18.sp
+                                        )
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // 手动检查新版本按钮
                             val isChecking = updateStatus is AppUpdateManager.UpdateStatus.Checking
                             Button(
                                 onClick = { viewModel.checkForUpdates(manual = true) },
@@ -229,12 +386,12 @@ fun SettingsScreen(
                                         color = MaterialTheme.colorScheme.onPrimary
                                     )
                                     Spacer(modifier = Modifier.width(8.dp))
-                                    Text(if (isZh) "正在连接 GitHub 检查..." else "Checking releases...")
+                                    Text(if (isZh) "正在检测更新..." else "Checking...")
                                 } else {
                                     Icon(Icons.Outlined.SystemUpdate, contentDescription = null, modifier = Modifier.size(18.dp))
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = if (isZh) "检查 GitHub 最新版本" else "Check for Latest Releases",
+                                        text = if (isZh) "检查新版本" else "Check for Updates",
                                         fontWeight = FontWeight.Bold
                                     )
                                 }
@@ -243,8 +400,8 @@ fun SettingsScreen(
                     }
                 }
 
-                // --- 2. 项目开源仓库 Bento 卡片 ---
-                item(key = "github_card", contentType = "card") {
+                // --- 3. 运行日志小模块 (默认收起，放在小角落) ---
+                item(key = "logs_corner_card", contentType = "card") {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = ShapeBentoCard,
@@ -253,314 +410,90 @@ fun SettingsScreen(
                         ),
                         elevation = CardDefaults.cardElevation(0.dp)
                     ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = ShapeSquircle,
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Code,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isZh) "开源项目地址" else "GitHub Repository",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = AppStrings.GITHUB_REPO_NAME,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Button(
-                                onClick = { uriHandler.openUri(AppStrings.GITHUB_RELEASES_URL) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = ShapePill
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Outlined.OpenInNew,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.githubReleasesBtn(currentLang),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            OutlinedButton(
-                                onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = ShapePill
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Code,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.githubRepoBtn(currentLang),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // --- 3. 法律合规与用户使用协议 Bento 卡片 ---
-                item(key = "legal_terms_card", contentType = "card") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = ShapeBentoCard,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = ShapeSquircle,
-                                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Gavel,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = AppStrings.settingsLegalCardTitle(currentLang),
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = AppStrings.settingsLegalCardSubtitle(currentLang),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                            OutlinedButton(
-                                onClick = { showLegalDialog = true },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = ShapePill
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.Description,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = AppStrings.settingsLegalCardBtn(currentLang),
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // --- 4. 当前登录账号信息与退出登录 Bento 卡片 ---
-                item(key = "account_card", contentType = "card") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = ShapeBentoCard,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    shape = ShapeSquircle,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(38.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Outlined.Person,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = if (isZh) "当前登录账号" else "Current Account",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                    Text(
-                                        text = loginState.username ?: (if (isZh) "已登录" else "Logged In"),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                            Button(
-                                onClick = {
-                                    viewModel.logout()
-                                    onBack()
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.error,
-                                    contentColor = MaterialTheme.colorScheme.onError
-                                ),
-                                shape = ShapePill
-                            ) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Outlined.ExitToApp,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                Text(
-                                    text = if (isZh) "退出当前学习通账号" else "Log Out",
-                                    fontWeight = FontWeight.Bold
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // --- 5. 脱敏运行日志记录 Bento 卡片 ---
-                item(key = "logs_header", contentType = "card") {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = ShapeBentoCard,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        elevation = CardDefaults.cardElevation(0.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
+                        Column(modifier = Modifier.padding(16.dp)) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(ShapePill)
+                                    .clickable { isLogsExpanded = !isLogsExpanded },
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Row(
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(ShapePill)
-                                        .clickable { isLogsExpanded = !isLogsExpanded },
-                                    verticalAlignment = Alignment.CenterVertically
+                                Text(
+                                    text = if (isZh) "运行日志与事件" else "Runtime Logs",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Surface(
+                                    shape = ShapePill,
+                                    color = MaterialTheme.colorScheme.surfaceContainerHighest
                                 ) {
                                     Text(
-                                        text = if (isZh) "精简运行日志" else "Runtime Logs",
-                                        style = MaterialTheme.typography.titleMedium,
+                                        text = "${logs.size}",
+                                        style = MaterialTheme.typography.labelSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                     )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Surface(
-                                        shape = ShapePill,
-                                        color = MaterialTheme.colorScheme.primaryContainer
+                                }
+
+                                if (isLogsExpanded) {
+                                    IconButton(
+                                        onClick = {
+                                            val logText = logs.joinToString("\n") { "[${it.timestamp}] ${AppStrings.translateLog(NotificationHelper.humanize(it.message, currentLang), currentLang)}" }
+                                            clipboardManager.setText(AnnotatedString(logText))
+                                            Toast.makeText(context, if (isZh) "日志已复制" else "Logs copied", Toast.LENGTH_SHORT).show()
+                                        },
+                                        modifier = Modifier.size(32.dp)
                                     ) {
-                                        Text(
-                                            text = "${logs.size}",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                                        )
+                                        Icon(Icons.Outlined.ContentCopy, contentDescription = "复制", modifier = Modifier.size(16.dp))
+                                    }
+                                    IconButton(
+                                        onClick = { viewModel.clearLogs() },
+                                        modifier = Modifier.size(32.dp)
+                                    ) {
+                                        Icon(Icons.Outlined.DeleteSweep, contentDescription = "清空", tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
                                     }
                                 }
 
-                                IconButton(
-                                    onClick = {
-                                        val logText = logs.joinToString("\n") { "[${it.timestamp}] ${NotificationHelper.humanize(it.message, currentLang)}" }
-                                        clipboardManager.setText(AnnotatedString(logText))
-                                        Toast.makeText(context, if (isZh) "日志已安全复制到剪贴板" else "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
-                                    },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.ContentCopy,
-                                        contentDescription = "复制日志",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { viewModel.clearLogs() },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.DeleteSweep,
-                                        contentDescription = "清空日志",
-                                        tint = MaterialTheme.colorScheme.error,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
-
-                                IconButton(
-                                    onClick = { isLogsExpanded = !isLogsExpanded },
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isLogsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                                        contentDescription = null,
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
+                                Icon(
+                                    imageVector = if (isLogsExpanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(20.dp)
+                                )
                             }
 
+                            // 展开后才渲染日志列表
                             AnimatedVisibility(
                                 visible = isLogsExpanded,
-                                enter = expandVertically(animationSpec = spring(dampingRatio = 0.72f, stiffness = 380f)) + fadeIn(animationSpec = tween(220)),
-                                exit = shrinkVertically(animationSpec = spring(stiffness = 380f)) + fadeOut(animationSpec = tween(180))
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
                             ) {
-                                Column(modifier = Modifier.padding(top = 12.dp)) {
+                                Column(modifier = Modifier.padding(top = 10.dp)) {
                                     if (logs.isEmpty()) {
                                         Text(
-                                            text = if (isZh) "暂无运行日志" else "No logs available",
+                                            text = if (isZh) "暂无运行日志" else "No logs recorded",
                                             style = MaterialTheme.typography.bodySmall,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.padding(vertical = 12.dp)
+                                            modifier = Modifier.padding(vertical = 8.dp)
                                         )
                                     } else {
                                         Surface(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .height(280.dp),
-                                            shape = ShapeBentoCard,
+                                                .height(240.dp),
+                                            shape = RoundedCornerShape(12.dp),
                                             color = MaterialTheme.colorScheme.surface
                                         ) {
                                             LazyColumn(
                                                 state = listState,
                                                 modifier = Modifier
                                                     .fillMaxSize()
-                                                    .padding(10.dp),
-                                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                                                    .padding(8.dp),
+                                                verticalArrangement = Arrangement.spacedBy(4.dp)
                                             ) {
                                                 items(logs, key = { it.id }) { log ->
                                                     val color = when (log.type) {
@@ -569,7 +502,8 @@ fun SettingsScreen(
                                                         MainViewModel.LogType.WARNING -> Color(0xFFE65100)
                                                         MainViewModel.LogType.ERROR -> MaterialTheme.colorScheme.error
                                                     }
-                                                    val cleanMsg = NotificationHelper.humanize(log.message, currentLang)
+                                                    // 强制双语翻译，杜绝英文模式下出现中文
+                                                    val cleanMsg = AppStrings.translateLog(NotificationHelper.humanize(log.message, currentLang), currentLang)
 
                                                     Row(
                                                         modifier = Modifier.fillMaxWidth(),
@@ -581,7 +515,7 @@ fun SettingsScreen(
                                                             color = MaterialTheme.colorScheme.outline,
                                                             fontFamily = FontFamily.Monospace,
                                                             fontSize = 10.sp,
-                                                            modifier = Modifier.width(62.dp)
+                                                            modifier = Modifier.width(60.dp)
                                                         )
                                                         Text(
                                                             text = cleanMsg,
@@ -600,10 +534,154 @@ fun SettingsScreen(
                         }
                     }
                 }
+
+                // --- 4. 法律合规声明卡片 (写在下面) ---
+                item(key = "legal_card_bottom", contentType = "card") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ShapeBentoCard,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = ShapeSquircle,
+                                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Gavel,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = AppStrings.settingsLegalCardTitle(currentLang),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = AppStrings.settingsLegalCardSubtitle(currentLang),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedButton(
+                                onClick = { showLegalDialog = true },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = ShapePill
+                            ) {
+                                Icon(Icons.Outlined.Description, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(AppStrings.settingsLegalCardBtn(currentLang), fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // --- 5. 开源项目地址与仓库链接 (写到最下面) ---
+                item(key = "github_card_bottom", contentType = "card") {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = ShapeBentoCard,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        elevation = CardDefaults.cardElevation(0.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(18.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    shape = ShapeSquircle,
+                                    color = MaterialTheme.colorScheme.secondaryContainer,
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Outlined.Code,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = if (isZh) "开源项目地址" else "GitHub Repository",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = AppStrings.GITHUB_REPO_NAME,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { uriHandler.openUri(AppStrings.GITHUB_RELEASES_URL) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = ShapePill
+                                ) {
+                                    Icon(Icons.AutoMirrored.Outlined.OpenInNew, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (isZh) "发布页" else "Releases", fontWeight = FontWeight.Bold)
+                                }
+                                OutlinedButton(
+                                    onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
+                                    modifier = Modifier.weight(1f),
+                                    shape = ShapePill
+                                ) {
+                                    Icon(Icons.Outlined.Code, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (isZh) "源码仓库" else "Repository", fontWeight = FontWeight.Bold)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // --- 6. 灰色版权与非商业学术声明 (置于页面最底部) ---
+                item(key = "footer_notice") {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = if (isZh) "学习星 (StudyStar) 仅供技术探索与学术研究使用" else "StudyStar is for educational and research purposes only",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                        Text(
+                            text = "SuperStar_R Core Engine | Jetpack Compose Native",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+                            fontSize = 10.sp
+                        )
+                    }
+                }
             }
         }
 
-        // --- 应用内更新弹窗 ---
+        // 应用内更新弹窗
         if (showUpdateDialog && updateStatus is AppUpdateManager.UpdateStatus.NewVersionAvailable) {
             val info = (updateStatus as AppUpdateManager.UpdateStatus.NewVersionAvailable).info
             ExpressiveUpdateDialog(
@@ -625,7 +703,7 @@ fun SettingsScreen(
             )
         }
 
-        // 法律合规声明对话框
+        // 法律声明弹窗
         if (showLegalDialog) {
             LegalNoticeDialog(
                 currentLang = currentLang,

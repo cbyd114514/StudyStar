@@ -14,6 +14,27 @@ object AppStrings {
 
 
     // --- 自动更新与版本提示 App Update ---
+    
+    // --- DeepSeek 专属与界面编辑扩展 ---
+    fun autoCheckUpdateLabel(lang: String): String = if (lang == "zh") "自动检查新版本" else "Auto Check Updates"
+    fun autoCheckUpdateDesc(lang: String): String = if (lang == "zh") "启动时自动检测 GitHub 最新 Release" else "Automatically check for releases on startup"
+    fun briefChangelogTitle(lang: String): String = if (lang == "zh") "更新内容" else "What's New"
+    fun deepseekLoginBtn(lang: String): String = if (lang == "zh") "登录 DeepSeek 网页免填提取 API Key" else "Login DeepSeek to Auto-Capture API Key"
+    fun deepseekBoundBadge(lang: String): String = if (lang == "zh") "已绑定 DeepSeek" else "DeepSeek Linked"
+    fun deepseekUnboundBadge(lang: String): String = if (lang == "zh") "未绑定 DeepSeek" else "Not Linked"
+    fun deepseekConfigTitle(lang: String): String = if (lang == "zh") "DeepSeek 智能答题" else "DeepSeek AI Quiz Solver"
+    fun editSpeedDialogTitle(lang: String): String = if (lang == "zh") "精确修改播放倍速" else "Edit Playback Speed"
+    fun editJobsDialogTitle(lang: String): String = if (lang == "zh") "精确修改并发任务数" else "Edit Concurrency Jobs"
+    fun editSpeedHint(lang: String): String = if (lang == "zh") "请输入 0.5 到 3.0 之间的数值 (例如 1.5)" else "Enter 0.5 - 3.0 (e.g. 1.5)"
+    fun editJobsHint(lang: String): String = if (lang == "zh") "请输入 1 到 8 之间的整数" else "Enter integer 1 - 8"
+    fun saveBtn(lang: String): String = if (lang == "zh") "确定" else "OK"
+    fun cancelBtn(lang: String): String = if (lang == "zh") "取消" else "Cancel"
+    fun currentAccountLabel(lang: String): String = if (lang == "zh") "当前登录账号" else "Current Account"
+    fun logoutAccountBtn(lang: String): String = if (lang == "zh") "退出登录" else "Log Out"
+    fun courseExpandBtn(lang: String): String = if (lang == "zh") "展开课程列表" else "Expand List"
+    fun courseCollapseBtn(lang: String): String = if (lang == "zh") "收起课程列表" else "Collapse List"
+    fun courseListTitle(lang: String): String = if (lang == "zh") "待学课程配置" else "Course Selection"
+
     fun updateCheckTitle(lang: String): String = if (lang == "zh") "检查新版本" else "Check for Updates"
     fun updateAvailableBanner(lang: String, ver: String): String =
         if (lang == "zh") "发现新版本 $ver，点击查看更新详情" else "New version $ver available, tap to view details"
@@ -469,11 +490,12 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
             .replace("[提示]", "[Tip]")
             .replace("[其他任务]", "[Task]")
             .replace("[AI]", "[AI]")
+            .replace("[DeepSeek]", "[DeepSeek]")
             .replace("[SiliconFlow]", "[SiliconFlow]")
             .replace("[系统]", "[System]")
             .replace("[解析]", "[Parser]")
 
-        // 2. 作业与测验相关语句
+        // 2. 常用完整句子翻译
         msg = msg.replace(Regex("""测验成绩:\s*([0-9.]+)\s*分，已达到及格线\(60分\)"""), "Quiz score: $1 pts, passed passing score (60 pts)")
         msg = msg.replace(Regex("""测验成绩:\s*([0-9.]+)\s*分，未达及格线\(60分\)，正在自动重做并重新提交\.\.\."""), "Quiz score: $1 pts, below passing score (60 pts), automatically retaking and resubmitting...")
         msg = msg.replace("测验成绩:", "Quiz score:")
@@ -487,7 +509,7 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("正在提交答案至", "Submitting answers to")
         msg = msg.replace("提交答题成功", "Quiz submitted successfully")
         msg = msg.replace("提交答题失败", "Quiz submission failed")
-        msg = msg.replace("已通过大模型作答完成", "Answered via LLM")
+        msg = msg.replace("已通过大模型作答完成", "Answered via DeepSeek LLM")
         msg = msg.replace("未配置大模型或作答失败，随机选择保底", "LLM not configured or failed, fallback to random choice")
         msg = msg.replace("正在解析题目...", "Parsing quiz questions...")
         msg = msg.replace("成功解析题目，准备作答...", "Questions parsed successfully, preparing to answer...")
@@ -495,21 +517,21 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("教师未创建完成该测验", "Instructor has not published this quiz")
         msg = msg.replace("测验题目参数已更新或未到开放作答时间，已自动记录并继续后续学习", "Quiz parameters updated or not yet open; automatically recorded and proceeding")
 
-        // 3. 视频播放相关语句
+        // 3. 视频与任务
         msg = msg.replace("开始播放:", "Start playing:")
         msg = msg.replace("开始播放", "Start playing")
         msg = msg.replace("播放完成:", "Playback completed:")
         msg = msg.replace("播放完成", "Playback completed")
         msg = msg.replace("视频播放进度:", "Video progress:")
         msg = msg.replace("正在跳过", "Skipping")
+        msg = msg.replace("跳过任务点", "Skip task point")
+        msg = msg.replace("任务点处理完成", "Task point completed")
+        msg = msg.replace("任务点完成", "Task point done")
 
-        // 4. 讨论与阅读
-        msg = msg.replace("自动参与讨论成功", "Participated in discussion successfully")
-        msg = msg.replace("自动参与讨论容错:", "Discussion fallback:")
-        msg = msg.replace("讨论已发表", "Discussion posted")
-
-        // 5. 章节与并发执行
+        // 4. 章节与并发
         msg = msg.replace("线程处理章节:", "Thread processing chapter:")
+        msg = msg.replace("开始学习章节:", "Starting chapter:")
+        msg = msg.replace("正在处理章节:", "Processing chapter:")
         msg = msg.replace("章节完成:", "Chapter completed:")
         msg = msg.replace("重试章节", "Retrying chapter")
         msg = msg.replace("未知章节状态:", "Unknown chapter status:")
@@ -517,7 +539,7 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("章节处理失败已达最大重试次数:", "Chapter failed, reached max retries:")
         msg = msg.replace("章节未开放", "Chapter not open")
 
-        // 6. 课程与刷课总任务
+        // 5. 课程与刷课
         msg = msg.replace("===== 开始刷课任务 =====", "===== Starting study tasks =====")
         msg = msg.replace("===== 刷课任务完成 =====", "===== All study tasks completed =====")
         msg = msg.replace("刷课任务全部完成!", "All study tasks finished successfully!")
@@ -538,7 +560,7 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("未检测到可选课程，请检查课程是否已结课或已全部完成", "No courses found; please check if courses have ended or are already completed")
         msg = msg.replace("当前章节所有可处理任务点已顺利完成", "All available task points in current chapter completed smoothly")
 
-        // 7. 登录与会话凭据
+        // 6. 登录与凭据
         msg = msg.replace("正在检查已保存的登录状态...", "Checking saved login status...")
         msg = msg.replace(Regex("""已加载\s*(\d+)\s*个 cookies"""), "Loaded $1 cookies")
         msg = msg.replace("关键凭据状态:", "Key credentials status:")
@@ -562,58 +584,58 @@ Select provider, paste your API Key. The key is encrypted at rest using Android 
         msg = msg.replace("清除会话缓存失败:", "Failed to clear session cache:")
         msg = msg.replace("已加载保存的账号:", "Loaded saved account:")
 
-        // 8. 大模型与参数配置
-        msg = msg.replace("大模型初始化成功:", "LLM initialized successfully:")
-        msg = msg.replace("大模型初始化失败:", "LLM initialization failed:")
-        msg = msg.replace("大模型初始化异常:", "LLM initialization exception:")
-        msg = msg.replace("大模型智能答题已启用", "LLM quiz solver enabled")
-        msg = msg.replace("大模型智能答题未启用（开关关闭或未配置API）", "LLM quiz solver disabled (switch off or no API)")
-        msg = msg.replace("大模型答题已配置", "LLM quiz solver configured")
-        msg = msg.replace("大模型连接测试成功", "LLM connection test succeeded")
-        msg = msg.replace("大模型连接测试失败", "LLM connection test failed")
-        msg = msg.replace("已恢复此账号关联的 API Key 大模型配置", "Restored LLM API Key config for this account")
+        // 7. 大模型与 DeepSeek
+        msg = msg.replace("大模型初始化成功:", "DeepSeek LLM initialized successfully:")
+        msg = msg.replace("大模型初始化失败:", "DeepSeek LLM initialization failed:")
+        msg = msg.replace("大模型初始化异常:", "DeepSeek LLM initialization exception:")
+        msg = msg.replace("大模型智能答题已启用", "DeepSeek quiz solver enabled")
+        msg = msg.replace("大模型智能答题未启用（开关关闭或未配置API）", "DeepSeek quiz solver disabled (switch off or no API)")
+        msg = msg.replace("大模型答题已配置", "DeepSeek solver configured")
+        msg = msg.replace("大模型连接测试成功", "DeepSeek connection test succeeded")
+        msg = msg.replace("大模型连接测试失败", "DeepSeek connection test failed")
+        msg = msg.replace("已恢复此账号关联的 API Key 大模型配置", "Restored DeepSeek API Key for this account")
         msg = msg.replace("已恢复此账号历史勾选的课程", "Restored selected courses for this account")
-        msg = msg.replace("API Key 与大模型配置已加密保存至当前账号", "API Key and LLM config safely encrypted and saved to account")
-        msg = msg.replace("配置已保存:", "Configuration saved:")
-        msg = msg.replace("已加载保存的配置:", "Loaded saved configuration:")
+        msg = msg.replace("API Key 与大模型配置已加密保存至当前账号", "DeepSeek API Key securely encrypted and saved")
+        msg = msg.replace("配置已保存:", "Config saved:")
+        msg = msg.replace("已加载保存的配置:", "Loaded saved config:")
         msg = msg.replace("速度=", "Speed=")
         msg = msg.replace("并发=", "Concurrency=")
-        msg = msg.replace("收到大模型配置:", "Received LLM configuration:")
-        msg = msg.replace("使用大模型配置:", "Using LLM configuration:")
-        msg = msg.replace("收到已获取的课程列表:", "Received cached course list:")
-        msg = msg.replace("使用已获取的课程列表", "Using cached course list")
         msg = msg.replace("Python 运行环境就绪:", "Python runtime ready:")
         msg = msg.replace("Python 环境初始化提示:", "Python environment notice:")
         msg = msg.replace("环境检测通过", "Environment check passed")
         msg = msg.replace("环境检测失败:", "Environment check failed:")
-        msg = msg.replace("正在请求", "Requesting")
-        msg = msg.replace("获取到答案:", "Answer received:")
-        msg = msg.replace("API请求失败:", "API request failed:")
-        msg = msg.replace("请求异常:", "Request exception:")
-        msg = msg.replace("请求失败:", "Request failed:")
-        msg = msg.replace("已达最大重试次数", "Reached max retries")
-        msg = msg.replace("无法解析大模型输出内容:", "Cannot parse LLM response:")
+        msg = msg.replace("已从剪贴板捕获 DeepSeek API Key", "Captured DeepSeek API Key from clipboard")
+        msg = msg.replace("已自动识别 DeepSeek API Key", "DeepSeek API Key detected automatically")
+        msg = msg.replace("DeepSeek API 授权成功并已就绪", "DeepSeek API authorized and ready")
 
-        // 9. 异常与网络容错
-        msg = msg.replace("学习通服务器访问受限，请稍候几分钟再试或切换手机网络", "Server access temporarily restricted; please wait a few minutes or switch network")
-        msg = msg.replace("网络连接中断，请检查手机 Wi-Fi 或移动数据网络", "Network disconnected; please check your Wi-Fi or mobile data")
-        msg = msg.replace("网络请求超时，系统正在自动重试", "Network request timed out; automatically retrying")
-        msg = msg.replace("学习通服务器返回数据格式异常，已自动跳过并继续", "Server response format abnormal; automatically skipped and continuing")
-        msg = msg.replace("已有刷课任务在后台运行中，无需重复开启", "A study task is already running in background")
-        msg = msg.replace("任务遇到微小网络波动，系统正在自动容错处理", "Minor network glitch detected; automatically handling error")
-        msg = msg.replace("刷课任务已在运行中", "Study task is already running")
-        msg = msg.replace("刷课任务异常:", "Study task exception:")
-        msg = msg.replace("完整堆栈:", "Full stack trace:")
-        msg = msg.replace("解析课程列表失败:", "Failed to parse course list:")
-        msg = msg.replace("加载配置失败:", "Failed to load config:")
-
-        // 10. 自动更新与版本日志
-        msg = msg.replace("发现新版本", "Found new version")
+        // 8. 自动更新与下载
+        msg = msg.replace("发现新版本", "New version found")
         msg = msg.replace("已弹出更新面板", "Update dialog shown")
         msg = msg.replace("当前已是最新版本", "Currently on the latest version")
         msg = msg.replace("检查更新失败:", "Check update failed:")
-        msg = msg.replace("更新包下载完成，正在唤起系统安装器", "Update APK downloaded, launching installer")
+        msg = msg.replace("开始下载更新安装包...", "Downloading update package...")
+        msg = msg.replace("更新包下载完成，正在唤起系统安装器", "Update downloaded, launching installer")
+        msg = msg.replace("更新包下载失败", "Failed to download update")
 
-        return msg
+        // 9. 核心词根兜底转换（彻底消除英文模式下的残余中文单词）
+        msg = msg.replace("章节", "Chapter ")
+            .replace("课程", "Course ")
+            .replace("视频", "Video ")
+            .replace("作业", "Quiz ")
+            .replace("测验", "Quiz ")
+            .replace("任务点", "Task point ")
+            .replace("完成", "Done ")
+            .replace("成功", "Success ")
+            .replace("失败", "Failed ")
+            .replace("处理", "Process ")
+            .replace("开始", "Start ")
+            .replace("结束", "End ")
+            .replace("重试", "Retry ")
+            .replace("跳过", "Skip ")
+            .replace("异常", "Exception ")
+            .replace("错误", "Error ")
+            .replace("警告", "Warning ")
+
+        return msg.trim()
     }
 }
