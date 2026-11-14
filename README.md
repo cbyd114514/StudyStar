@@ -7,7 +7,7 @@
   </p>
 
   <p align="center">
-    <a href="https://github.com/cbyd114514/StudyStar/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-v1.5.6-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载最新版 APK" /></a>
+    <a href="https://github.com/cbyd114514/StudyStar/releases/latest"><img src="https://img.shields.io/badge/Download%20APK-v1.5.8-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="下载最新版 APK" /></a>
   </p>
 </p>
 

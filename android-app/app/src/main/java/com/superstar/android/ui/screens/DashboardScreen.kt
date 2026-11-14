@@ -15,6 +15,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -85,6 +86,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -138,6 +140,9 @@ fun DashboardScreen(
     val llmTestState by viewModel.llmTestState.collectAsState()
     val recentIssues by viewModel.recentIssues.collectAsState()
     val isLlmEnabled by viewModel.isLlmEnabled.collectAsState()
+
+    val context = LocalContext.current
+    val isZh = currentLang == "zh"
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
@@ -938,19 +943,30 @@ fun DashboardScreen(
                                         }
                                     }
 
-                                    // 智能答题独立开关：未配置 API 情况下默认关闭且禁用
-                                    Switch(
-                                        checked = hasApiKey && isLlmEnabled,
-                                        onCheckedChange = { checked: Boolean ->
-                                            if (hasApiKey) {
+                                    // 智能答题独立开关：未配置 API 情况下默认关闭且禁用，点击提示并展开配置
+                                    Box(
+                                        modifier = Modifier.clickable(
+                                            interactionSource = remember { MutableInteractionSource() },
+                                            indication = null,
+                                            enabled = !hasApiKey
+                                        ) {
+                                            showLlmSection = true
+                                            android.widget.Toast.makeText(
+                                                context,
+                                                if (isZh) "请先在下方配置并保存 API Key" else "Please configure and save API Key below first",
+                                                android.widget.Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    ) {
+                                        Switch(
+                                            checked = hasApiKey && isLlmEnabled,
+                                            onCheckedChange = { checked: Boolean ->
                                                 viewModel.setLlmEnabled(checked)
-                                            } else {
-                                                showLlmSection = true
-                                            }
-                                        },
-                                        enabled = hasApiKey,
-                                        modifier = Modifier.padding(end = 2.dp)
-                                    )
+                                            },
+                                            enabled = hasApiKey,
+                                            modifier = Modifier.padding(end = 2.dp)
+                                        )
+                                    }
                                 }
 
                                 // 小角落里的使用说明圆圈图标按钮（冒号/问号加一个圈，点击弹窗）

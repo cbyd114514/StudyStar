@@ -7,6 +7,13 @@ object AppStrings {
 
     const val GITHUB_REPO_URL = "https://github.com/cbyd114514/StudyStar"
     const val GITHUB_REPO_NAME = "cbyd114514/StudyStar"
+    const val GITHUB_RELEASES_URL = "https://github.com/cbyd114514/StudyStar/releases"
+
+    fun githubReleasesBtn(lang: String): String =
+        if (lang == "zh") "前往最新安装包发布页 (Releases)" else "Download Latest Releases"
+
+    fun githubRepoBtn(lang: String): String =
+        if (lang == "zh") "访问 GitHub 源码仓库" else "Visit GitHub Project"
 
     fun appName(lang: String): String = if (lang == "zh") "学习星" else "StudyStar"
 

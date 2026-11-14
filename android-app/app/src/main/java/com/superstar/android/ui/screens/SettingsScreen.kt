@@ -180,8 +180,8 @@ fun SettingsScreen(
                             }
                         }
                         Spacer(modifier = Modifier.height(14.dp))
-                        FilledTonalButton(
-                            onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
+                        Button(
+                            onClick = { uriHandler.openUri(AppStrings.GITHUB_RELEASES_URL) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium
                         ) {
@@ -192,8 +192,25 @@ fun SettingsScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = if (isZh) "打开 GitHub 仓库网址" else "Visit GitHub Project",
+                                text = AppStrings.githubReleasesBtn(currentLang),
                                 fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        OutlinedButton(
+                            onClick = { uriHandler.openUri(AppStrings.GITHUB_REPO_URL) },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.Code,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = AppStrings.githubRepoBtn(currentLang),
+                                fontWeight = FontWeight.Normal
                             )
                         }
                     }

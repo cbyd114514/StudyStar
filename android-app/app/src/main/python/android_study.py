@@ -1918,10 +1918,50 @@ class AndroidStudyEngine:
                 answer = ""
                 res = None
 
-                # 优先匹配上一轮已批阅提取出的真实标准答案
+                # 优先匹配上一轮已批阅提取出的真实标准答案，并标准化转换为超星后台提交格式
                 if title in known_correct_answers:
-                    answer = known_correct_answers[title]
-                    self.log(f"[作业] 命中上一轮已批阅正确答案 -> {answer}")
+                    raw_correct = str(known_correct_answers[title]).strip()
+                    self.log(f"[作业] 命中上一轮批阅正解原始值 -> {raw_correct}")
+                    if q_type == "judgement":
+                        answer = self._judgement_select(raw_correct)
+                    elif q_type == "single":
+                        if len(raw_correct) == 1 and raw_correct.upper() in "ABCDEFG":
+                            answer = raw_correct.upper()
+                        else:
+                            options_list = multi_cut(options)
+                            for opt_idx, opt_raw in enumerate(options_list):
+                                opt_letter = chr(ord('A') + opt_idx)
+                                m_lead = re.match(r'^([A-Ga-g])[\s.、:，]', opt_raw)
+                                if m_lead:
+                                    opt_letter = m_lead.group(1).upper()
+                                opt_body = re.sub(r'^[A-Ga-g][\s.、:，]*', '', opt_raw).strip()
+                                if raw_correct == opt_body or raw_correct in opt_body or opt_body in raw_correct:
+                                    answer = opt_letter
+                                    break
+                            if not answer and len(raw_correct) >= 1 and raw_correct[0].upper() in "ABCDEFG":
+                                answer = raw_correct[0].upper()
+                    elif q_type == "multiple":
+                        matched_letters = re.findall(r'[A-Ga-g]', raw_correct)
+                        valid_letters = [c.upper() for c in matched_letters if c.upper() in "ABCDEFG"]
+                        if len(set(valid_letters)) >= 2:
+                            answer = "".join(sorted(set(valid_letters)))
+                        else:
+                            options_list = multi_cut(options)
+                            collected = set()
+                            for opt_idx, opt_raw in enumerate(options_list):
+                                opt_letter = chr(ord('A') + opt_idx)
+                                m_lead = re.match(r'^([A-Ga-g])[\s.、:，]', opt_raw)
+                                if m_lead:
+                                    opt_letter = m_lead.group(1).upper()
+                                opt_body = re.sub(r'^[A-Ga-g][\s.、:，]*', '', opt_raw).strip()
+                                if opt_body and (opt_body in raw_correct or raw_correct in opt_body):
+                                    collected.add(opt_letter)
+                            if collected:
+                                answer = "".join(sorted(collected))
+                    else:
+                        answer = raw_correct
+
+                    self.log(f"[作业] 标准正解已映射为提交格式 -> {answer}")
                     q[f"answerSource{q_id}"] = "cover"
                     found_answers += 1
                 elif hasattr(self, "llm_provider") and self.llm_provider:
@@ -2022,6 +2062,8 @@ class AndroidStudyEngine:
                     final_ans = random_answer(q.get("options", ""), q.get("type", "single"))
                 questions[f"answer{q_id}"] = final_ans
                 questions[f"answertype{q_id}"] = q["answerField"].get(f"answertype{q_id}", "0")
+                if q.get("type") in ("completion", "shortanswer"):
+                    questions[f"answerEditor{q_id}"] = final_ans
 
             del questions["questions"]
 
@@ -2190,10 +2232,7 @@ class AndroidStudyEngine:
                 except Exception:
                     pass
                 try:
-                    try:
-            gc.collect()
-        except Exception:
-            pass
+                    gc.collect()
                 except Exception:
                     pass
 
@@ -2384,7 +2423,9 @@ class AndroidStudyEngine:
             choice_str = self._extract_choices(li, font_decoder)
             if choice_str:
                 q_options.append(choice_str)
-        q_options.sort()
+        # 仅当所有选项都带有字母标号前缀时进行字母排序，否则严格保持网页原始顺序
+        if q_options and all(re.match(r'^[A-Ga-g][\s.、:，]', opt) for opt in q_options):
+            q_options.sort()
         q_options_str = "\n".join(q_options)
 
         return {
@@ -2394,7 +2435,7 @@ class AndroidStudyEngine:
             "type": q_type,
             "answerField": {
                 f"answer{question_id}": "",
-                f"answertype{question_id}": q_type_code if q_type_code else ("1" if q_type == "multiple" else "0"),
+                f"answertype{question_id}": str(q_type_code).strip() if q_type_code else {"single": "0", "multiple": "1", "completion": "2", "judgement": "3", "shortanswer": "4"}.get(q_type, "0"),
             },
         }
 
